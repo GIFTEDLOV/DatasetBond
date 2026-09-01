@@ -1,83 +1,97 @@
 # DatasetBond v2.1 integration guide
 
+## Published demonstration package
+
+The repository contains one self-owned demonstration package. It is intentionally small and is
+published to the public [`DatasetBond` repository](https://github.com/GIFTEDLOV/DatasetBond) for
+integration verification; it is not third-party production evidence and does not establish legal
+ownership or publisher authority.
+
+The dataset and license are pinned to commit
+`ac2cd29483d78adffc299f25c92702d6ffd05708`, and the linked provenance JSON is pinned to commit
+`52f5b0c82a2e305b5e607818e69e5acc1ff063d5`. The exact package, public issuer key, inline manifest,
+and digests are in [`examples/datasetbond-package.json`](../examples/datasetbond-package.json).
+Run the read-only validator before submitting any call:
+
+```powershell
+python tools/validate_inline_fixture.py
+```
+
+The validator independently fetches all three raw URLs, checks HTTP 200, hashes the exact response
+bytes, validates the provenance linkage, and verifies the inline signature. It performs no chain
+write and does not create or publish evidence.
+
 ## 1. Establish the trust root
 
 Deploy DatasetBond with the intended governance account. The deployer address becomes the immutable
-`trust_root`. Register an issuer key before asking for certification:
+`trust_root`. Register the public key from the package before asking for certification:
 
 ```text
 register_issuer_key(
-  "example-publisher",
-  "example-key-2026-a",
-  "<128 lowercase hex characters containing secp256k1 x||y>",
+  "datasetbond-demo",
+  "datasetbond-demo-key-2026-a",
+  "ec754b5dfd1c4678e36526ab729d8996eb1eecf344dc5e019c9352b5764e38096654c23b3876dc1f1e4572bc31c7713162f9f3324f6ffdd66dd00ae9e8cbbbe1",
   "SECP256K1_ECDSA_SHA256",
 )
 ```
 
-Keep the root account in the consumer's governance process. Key registration means only that this
-root approved the key/issuer mapping. It is not a legal identity or ownership attestation.
+Trust-root registration authenticates that the deployer approved this issuer/key mapping. It does
+not prove that the issuer is a legal identity, owns the dataset, or has authority to license it.
 
-## 2. Build and sign the canonical inline manifest
+## 2. Submit the exact package
 
-Create a JSON object with exactly the fields documented in [`docs/SCHEMA.md`](SCHEMA.md). Serialize
-it as sorted-key UTF-8 JSON with no insignificant whitespace and `ensure_ascii=false`. Remove the
-`signature` field, hash the remaining canonical bytes with SHA-256, and sign that hash using the
-issuer's secp256k1 private key. Encode low-`s` `r||s` as 128 lowercase hex characters, add it as
-`signature`, and canonicalize the complete signed object again.
+`examples/integration.py` loads the published fixture bytes and builds the exact call sequence:
 
-The package's `evidence_manifest_sha256` is the SHA-256 of the complete signed manifest bytes. The
-signed manifest covers the dataset ID/reference/digest, license reference/digest, provenance
-reference/digest, use profile, issuer identity, key ID, version, validity timestamps, algorithm,
-and signature. `nonce` is single-use after a terminal certification result. Keep the complete
-canonical signed JSON string in the registration call; it does not need to be published anywhere.
-
-## 3. Register exact evidence
-
-Submit this exact argument order to `register_dataset`:
-
-```json
-[
-  "demo-dataset-1",
-  "https://raw.githubusercontent.com/acme/datasets/<40-hex-commit>/data.csv",
-  "<sha256 of exact dataset bytes>",
-  "https://raw.githubusercontent.com/spdx/license-list-data/<40-hex-commit>/licenses/MIT.txt",
-  "<sha256 of exact license bytes>",
-  "https://raw.githubusercontent.com/acme/provenance/<40-hex-commit>/manifest.json",
-  "<sha256 of exact provenance bytes>",
-  "<complete canonical signed manifest JSON supplied inline>",
-  "<sha256 of exact inline manifest UTF-8 bytes>",
-  "manifest-2026-01",
-  "example-publisher",
-  "example-key-2026-a",
-  "MODEL_TRAINING"
-]
+```powershell
+python examples/integration.py
 ```
 
-Replace the illustrative values with real evidence. Dataset, license, and provenance references
-must be content-addressed or commit-pinned; ordinary HTTPS URLs are rejected for those fields. The
-inline manifest is parsed and anchored at registration, so no new external manifest file or
-manifest publication is required. The three underlying evidence references still need to be
-available to validators at certification time.
+The registration arguments are, in order:
 
-## 4. Certify and consume
+```text
+register_dataset(
+  dataset_id,
+  dataset_reference,
+  dataset_sha256,
+  license_reference,
+  license_sha256,
+  provenance_reference,
+  provenance_sha256,
+  evidence_manifest,
+  evidence_manifest_sha256,
+  nonce,
+  publisher_identity,
+  key_id,
+  usage_profile,
+)
+```
+
+The inline manifest is canonical UTF-8 JSON with sorted keys and no insignificant whitespace. Its
+`signature` is low-`s` secp256k1 `r||s` over the SHA-256 of the canonical manifest with that field
+removed. The complete signed bytes are anchored by `evidence_manifest_sha256`. DatasetBond does
+not fetch a manifest URL.
+
+## 3. Certify and consume
 
 ```text
 certify_dataset(dataset_id) -> Certificate
 get_certificate(dataset_id) -> Certificate
 ```
 
-Accept only when all of these are true: `status == CERTIFIED`, `verdict == CERTIFIED`,
-`integrity_status == VERIFIED`, `authentication_status == AUTHENTICATED`,
-`license_status == COMPATIBLE`, and `provenance_status == COMPLETE`. Treat `INCONCLUSIVE` as
-pending and retryable; it is never an approval or rejection. `NOT_CERTIFIED` is a verified semantic
-negative. `REVOKED` is no longer live but retains the historical evidence and record.
+Accept only when `status == CERTIFIED`, `verdict == CERTIFIED`, `integrity_status == VERIFIED`,
+`authentication_status == AUTHENTICATED`, `license_status == COMPATIBLE`,
+`provenance_status == COMPLETE`, and the stored profile is the requested profile. The frontend or
+client must not compute or override the verdict. `INCONCLUSIVE` is retryable and never an approval;
+`NOT_CERTIFIED` is a verified semantic negative.
 
-## 5. Revoke or rotate
+## 4. Revoke or rotate
 
 Only the original registration submitter can revoke a live `CERTIFIED` certificate. Only the trust
-root can revoke or rotate issuer keys. Rotation creates a new active key and marks the old key
-`ROTATED`; future attempts under the old key are `INCONCLUSIVE`.
+root can revoke or rotate issuer keys. Rotation marks the old key `ROTATED`; future attempts under
+it are `INCONCLUSIVE`. Revocation preserves the historical evidence, digests, signer identity, and
+certification record.
 
-[`examples/integration.py`](../examples/integration.py) constructs client-neutral call payloads and
-uses no network, signer, deployment, or broadcast. A production client should use the supported
-GenLayer client for the selected environment.
+The package demonstrates integrity, trust-root key authentication, bounded license/provenance
+judgment, and lifecycle handling. It does not prove dataset factual correctness, legal ownership,
+legal enforceability, absence of undisclosed source material, or permanent availability of external
+URLs.

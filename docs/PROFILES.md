@@ -16,22 +16,22 @@ The canonical signed manifest contains exactly:
 
 ```json
 {
-  "nonce": "single-use-manifest",
+  "nonce": "datasetbond-demo-nonce-2026-09-01-a",
   "manifest_version": 2,
-  "dataset_id": "demo-dataset-1",
-  "dataset_reference": "registered content-addressed reference",
-  "dataset_sha256": "registered digest",
-  "license_reference": "registered content-addressed reference",
-  "license_sha256": "registered digest",
-  "provenance_reference": "registered content-addressed reference",
-  "provenance_sha256": "registered digest",
-  "usage_profile": "MODEL_TRAINING",
-  "publisher_identity": "example-publisher",
-  "key_id": "example-key-2026-a",
-  "issued_at": 1790000000,
-  "expires_at": 1790003600,
+  "dataset_id": "datasetbond-demo-observations",
+  "dataset_reference": "https://raw.githubusercontent.com/GIFTEDLOV/DatasetBond/ac2cd29483d78adffc299f25c92702d6ffd05708/examples/public-fixture/dataset.json",
+  "dataset_sha256": "7b24103a164674959d071b3e69baa2c194e4f24fdd373a5ea8a1e6f430d5eb12",
+  "license_reference": "https://raw.githubusercontent.com/GIFTEDLOV/DatasetBond/ac2cd29483d78adffc299f25c92702d6ffd05708/examples/public-fixture/LICENSE.txt",
+  "license_sha256": "8e28e056d91dbb82759a8e1b50ae0b81a07ddb3c2ee01e4592d38f9181a9881e",
+  "provenance_reference": "https://raw.githubusercontent.com/GIFTEDLOV/DatasetBond/52f5b0c82a2e305b5e607818e69e5acc1ff063d5/examples/public-fixture/provenance.json",
+  "provenance_sha256": "179a3e8edb8ea41b2cc974e000a520a95f2d8bb1332fdc62dfacbcf5492a8479",
+  "usage_profile": "RESEARCH_EVALUATION",
+  "publisher_identity": "datasetbond-demo",
+  "key_id": "datasetbond-demo-key-2026-a",
+  "issued_at": 1788220800,
+  "expires_at": 1819670400,
   "signature_algorithm": "SECP256K1_ECDSA_SHA256",
-  "signature": "lowercase hex r||s"
+  "signature": "7fc584a69b65228dfd25863f2ef7b944629b5b5794305581ef9f13ed7dd98a59300bc6da92d4a9ff2a4edf2bb97b39937ea7544fe781278c93e1cdea01896aec"
 }
 ```
 

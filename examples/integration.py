@@ -1,14 +1,16 @@
 """Client-neutral DatasetBond v2.1 integration example.
 
-This module constructs call-shaped payloads only. It does not sign, deploy, broadcast, or contact a
-network. The signed manifest is supplied inline; sign its canonical bytes with an approved issuer
-key before submitting the JSON string and digest.
+The checked-in package is a self-owned DatasetBond demonstration. This module loads its exact
+fixture bytes and builds call-shaped payloads; it does not sign, deploy, broadcast, or compute a
+certification verdict. A production client should submit the inline manifest and digest exactly as
+provided after the trust-root issuer key has been registered.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 
@@ -92,37 +94,39 @@ def accept_certificate(certificate: dict[str, Any], expected_profile: str) -> bo
     )
 
 
-if __name__ == "__main__":
-    package = {
-        "dataset_reference": "https://raw.githubusercontent.com/acme/datasets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/data.csv",
-        "license_reference": "https://raw.githubusercontent.com/spdx/license-list-data/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/licenses/MIT.txt",
-        "provenance_reference": "https://raw.githubusercontent.com/acme/provenance/cccccccccccccccccccccccccccccccccccccccc/manifests/demo.json",
-        "evidence_manifest": "<canonical signed evidence manifest JSON supplied inline>",
-    }
-    dataset_bytes = b"id,value\n1,example\n"
-    license_bytes = b"MIT license bytes"
-    provenance_bytes = b"<canonical provenance manifest bytes>"
-    evidence_manifest = "<canonical signed evidence manifest JSON supplied inline>"
-    calls = [
+def demonstration_calls() -> list[dict[str, Any]]:
+    """Return calls for the published self-owned demonstration package."""
+    package = json.loads(
+        (Path(__file__).with_name("datasetbond-package.json")).read_text(encoding="utf-8")
+    )
+    fixture_dir = Path(__file__).with_name("public-fixture")
+    dataset_bytes = (fixture_dir / "dataset.json").read_bytes()
+    license_bytes = (fixture_dir / "LICENSE.txt").read_bytes()
+    provenance_bytes = (fixture_dir / "provenance.json").read_bytes()
+    return [
         register_issuer_key_call(
-            "example-publisher",
-            "example-key-2026-a",
-            "<128 lowercase hex characters containing secp256k1 x||y>",
+            package["publisher_identity"],
+            package["key_id"],
+            package["issuer_public_key"],
         ),
         registration_call(
-            "demo-dataset-1",
+            package["dataset_id"],
             package["dataset_reference"],
             dataset_bytes,
             package["license_reference"],
             license_bytes,
             package["provenance_reference"],
             provenance_bytes,
-            evidence_manifest,
-            "manifest-2026-01",
-            "example-publisher",
-            "example-key-2026-a",
-            "MODEL_TRAINING",
+            package["evidence_manifest"],
+            package["nonce"],
+            package["publisher_identity"],
+            package["key_id"],
+            package["usage_profile"],
         ),
-        certification_call("demo-dataset-1"),
+        certification_call(package["dataset_id"]),
+        revocation_call(package["dataset_id"], "demonstration lifecycle complete"),
     ]
-    print(json.dumps(calls, indent=2))
+
+
+if __name__ == "__main__":
+    print(json.dumps(demonstration_calls(), indent=2))

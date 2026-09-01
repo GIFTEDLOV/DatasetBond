@@ -26,8 +26,9 @@ absence of undisclosed source material, or permanent availability of external UR
   collection.
 - [`tools/mutation_test.py`](tools/mutation_test.py) - critical-guard mutation gate.
 - [`examples/integration.py`](examples/integration.py) - client-neutral call construction.
-- [`tools/validate_inline_fixture.py`](tools/validate_inline_fixture.py) - offline positive-package
-  validation; it publishes no evidence and uses no network.
+- [`tools/validate_inline_fixture.py`](tools/validate_inline_fixture.py) - read-only validator for
+  the published self-owned demonstration package; it publishes no evidence and performs no chain
+  write.
 
 ## Local verification
 
@@ -48,7 +49,9 @@ python -m pip check
 git diff --check
 ```
 
-Studio integration is opt-in and requires a configured localnet or Studio:
+The fixture validator performs independent public URL fetches, exact-byte SHA-256 checks, provenance
+linkage checks, and inline manifest signature verification. It requires network access but never
+deploys or broadcasts. Studio integration is opt-in and requires a configured localnet or Studio:
 
 ```powershell
 $env:DATASETBOND_RUN_INTEGRATION = "1"
