@@ -1,0 +1,15 @@
+{
+  "created_at": "2026-09-01T00:00:00+00:00",
+  "dataset_reference": "https://raw.githubusercontent.com/GIFTEDLOV/DatasetBond/ac2cd29483d78adffc299f25c92702d6ffd05708/examples/public-fixture/dataset.json",
+  "dataset_sha256": "7b24103a164674959d071b3e69baa2c194e4f24fdd373a5ea8a1e6f430d5eb12",
+  "license_reference": "https://raw.githubusercontent.com/GIFTEDLOV/DatasetBond/ac2cd29483d78adffc299f25c92702d6ffd05708/examples/public-fixture/LICENSE.txt",
+  "license_sha256": "8e28e056d91dbb82759a8e1b50ae0b81a07ddb3c2ee01e4592d38f9181a9881e",
+  "publisher": "datasetbond-demo",
+  "source": "DatasetBond project self-owned demonstration package authored for integration verification",
+  "transformations": [
+    "Authored three meaningful observation records for this DatasetBond demonstration.",
+    "Serialized the records as deterministic UTF-8 JSON with stable key ordering and indentation.",
+    "Committed the dataset and MIT license at an immutable Git commit and computed SHA-256 digests."
+  ],
+  "version": "1.0.0"
+}
