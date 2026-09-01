@@ -1,8 +1,7 @@
-"""Client-neutral DatasetBond integration example.
+"""Client-neutral DatasetBond v2 integration example.
 
 This module constructs call-shaped payloads only. It does not sign, deploy, broadcast, or contact a
-network. Pass the method names and argument arrays to the supported GenLayer client for the chosen
-environment.
+network. Sign the canonical manifest with an approved issuer key before submitting its bytes/digest.
 """
 
 from __future__ import annotations
@@ -24,9 +23,14 @@ def registration_call(
     license_bytes: bytes,
     provenance_reference: str,
     provenance_bytes: bytes,
+    evidence_manifest_reference: str,
+    evidence_manifest_bytes: bytes,
+    manifest_id: str,
+    publisher_identity: str,
+    key_id: str,
     usage_profile: str,
 ) -> dict[str, Any]:
-    """Build the exact register_dataset method call and bind hashes to exact bytes."""
+    """Build the exact v2 register_dataset call and bind hashes to exact bytes."""
     return {
         "method": "register_dataset",
         "args": [
@@ -37,8 +41,31 @@ def registration_call(
             sha256_hex(license_bytes),
             provenance_reference,
             sha256_hex(provenance_bytes),
+            evidence_manifest_reference,
+            sha256_hex(evidence_manifest_bytes),
+            manifest_id,
+            publisher_identity,
+            key_id,
             usage_profile,
         ],
+    }
+
+
+def register_issuer_key_call(
+    issuer_id: str, key_id: str, public_key_hex: str
+) -> dict[str, Any]:
+    return {
+        "method": "register_issuer_key",
+        "args": [issuer_id, key_id, public_key_hex, "SECP256K1_ECDSA_SHA256"],
+    }
+
+
+def rotate_issuer_key_call(
+    issuer_id: str, old_key_id: str, new_key_id: str, new_public_key_hex: str
+) -> dict[str, Any]:
+    return {
+        "method": "rotate_issuer_key",
+        "args": [issuer_id, old_key_id, new_key_id, new_public_key_hex],
     }
 
 
@@ -51,10 +78,14 @@ def revocation_call(dataset_id: str, reason: str) -> dict[str, Any]:
 
 
 def accept_certificate(certificate: dict[str, Any], expected_profile: str) -> bool:
-    """Consumer-side gate: accept only a live certificate for the exact requested profile."""
+    """Consumer-side gate; it does not calculate or override the contract verdict."""
     return (
         certificate.get("status") == "CERTIFIED"
         and certificate.get("verdict") == "CERTIFIED"
+        and certificate.get("integrity_status") == "VERIFIED"
+        and certificate.get("authentication_status") == "AUTHENTICATED"
+        and certificate.get("license_status") == "COMPATIBLE"
+        and certificate.get("provenance_status") == "COMPLETE"
         and certificate.get("usage_profile") == expected_profile
         and isinstance(certificate.get("certification_record"), str)
         and bool(certificate["certification_record"])
@@ -64,27 +95,20 @@ def accept_certificate(certificate: dict[str, Any], expected_profile: str) -> bo
 if __name__ == "__main__":
     package = {
         "dataset_reference": "https://raw.githubusercontent.com/acme/datasets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/data.csv",
-        "license_reference": "https://raw.githubusercontent.com/spdx/license-list-data/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/licenses/MIT.json",
+        "license_reference": "https://raw.githubusercontent.com/spdx/license-list-data/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/licenses/MIT.txt",
         "provenance_reference": "https://raw.githubusercontent.com/acme/provenance/cccccccccccccccccccccccccccccccccccccccc/manifests/demo.json",
+        "evidence_manifest_reference": "https://publisher.example/evidence-manifest/demo-v2.json",
     }
     dataset_bytes = b"id,value\n1,example\n"
     license_bytes = b"MIT license bytes"
-    provenance_bytes = json.dumps(
-        {
-            "dataset_reference": package["dataset_reference"],
-            "dataset_sha256": sha256_hex(dataset_bytes),
-            "license_reference": package["license_reference"],
-            "license_sha256": sha256_hex(license_bytes),
-            "publisher": "Example Publisher",
-            "source": "Example source",
-            "version": "2026.01",
-            "created_at": "2026-01-01T00:00:00Z",
-            "transformations": [],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode()
+    provenance_bytes = b"<canonical provenance manifest bytes>"
+    evidence_manifest_bytes = b"<canonical signed evidence manifest bytes>"
     calls = [
+        register_issuer_key_call(
+            "example-publisher",
+            "example-key-2026-a",
+            "<128 lowercase hex characters containing secp256k1 x||y>",
+        ),
         registration_call(
             "demo-dataset-1",
             package["dataset_reference"],
@@ -93,6 +117,11 @@ if __name__ == "__main__":
             license_bytes,
             package["provenance_reference"],
             provenance_bytes,
+            package["evidence_manifest_reference"],
+            evidence_manifest_bytes,
+            "manifest-2026-01",
+            "example-publisher",
+            "example-key-2026-a",
             "MODEL_TRAINING",
         ),
         certification_call("demo-dataset-1"),

@@ -1,16 +1,23 @@
-# Limitations and non-claims
+# DatasetBond v2 limitations and non-claims
 
-DatasetBond certifies only the narrow question encoded by its declared profile and the exact
-evidence bytes that validators could verify. It does not certify:
+DatasetBond v2 improves authentication of signed evidence, but its trust model remains deliberately
+narrow. It does not certify:
 
-- factual correctness, quality, completeness, representativeness, bias, or safety of the dataset;
-- ownership, identity, authorization, or legal standing of the publisher or submitter;
-- that an immutable URL is an official source merely because it is immutable;
-- that consensus authenticates evidence or converts an untrusted manifest field into a verified
-  identity;
-- that a `NOT_CERTIFIED` result is a legal determination when license language is ambiguous; or
-- that an `INCONCLUSIVE` result means the package is incompatible.
+- dataset factual correctness, quality, completeness, representativeness, bias, or safety;
+- legal ownership, legal enforceability, licensing authority, or legal identity of an issuer;
+- absence of undisclosed source material, third-party rights, or personal data;
+- that a trust-root key registry is an official publisher registry;
+- that an immutable/content-addressed reference is hosted by an official source;
+- that an ordinary HTTPS signed-manifest locator will remain available;
+- that a valid signature means anything beyond control of the registered key over the exact manifest;
+- that a semantic verdict is a legal opinion; or
+- that `INCONCLUSIVE` means the license is incompatible.
 
-The contract intentionally returns `INCONCLUSIVE` when evidence is missing, unavailable,
-contradictory, unauthenticated, oversized, malformed, or digest-mismatched. Consumers should keep
-their own legal, publisher, privacy, and dataset-quality review processes alongside this primitive.
+The trust root authenticates an on-chain approval of an issuer identifier and public key. It does
+not authenticate the real-world publisher. Governance must therefore choose and document how issuer
+identifiers map to organizations, keys, and legal review outside the contract.
+
+External evidence can be unavailable, mutate behind a locator, exceed bounded limits, or produce
+validator disagreement. Dataset responses are limited to 1 MiB, licenses to 16 KiB, provenance
+manifests to 32 KiB, and signed manifests to 16 KiB. Signatures expire after the configured maximum
+lifetime and manifest IDs are single-use after terminal certification.

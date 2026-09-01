@@ -1,24 +1,32 @@
 # Provenance of reused patterns
 
-DatasetBond is new code in this repository. No source file was copied from another workspace. The
-following references informed the implementation patterns:
+DatasetBond v2 is an in-place hardening of commit `d34288aaf19cccd00c480d5ccc5f694ded7c2705`.
+The existing DatasetBond architecture, bounded verdict model, evidence-fetch boundary, and
+submitter-only certificate revocation were preserved. No source file was copied from another
+workspace, and Aegis, NimbusPact, and other repositories were not modified.
 
-- GenLayer's official project boilerplate and current API guidance: `gl.public.view/write`,
-  `gl.nondet.web.request`, JSON-mode `gl.nondet.exec_prompt`, `gl.vm.run_nondet`, direct `gltest`
-  mocks, and Studio integration collection. See the [official boilerplate](https://github.com/genlayerlabs/genlayer-project-boilerplate)
+The implementation patterns were informed by:
+
+- GenLayer's official project boilerplate and API guidance for `gl.public.view/write`,
+  `gl.nondet.web.request`, JSON-mode `gl.nondet.exec_prompt`, `gl.vm.run_nondet`, and direct
+  `gltest` usage. See the [official boilerplate](https://github.com/genlayerlabs/genlayer-project-boilerplate)
   and its [API notes](https://github.com/genlayerlabs/genlayer-project-boilerplate/blob/main/CLAUDE.md).
-- The local `source-consensus` reference informed the discipline of deterministic validation,
-  transaction-message timestamps, strict post-consensus revalidation, bounded model output, and
-  retryable unavailable evaluation. It was inspected read-only at
-  `C:\Users\DELL\source-consensus`.
-- The local `NimbusPact` reference informed checking HTTP status/body shape and hashing exact
-  response evidence. It was inspected read-only at `C:\Users\DELL\NimbusPact`.
-- The local `PatchBond` reference informed keeping access control, mutation gates, and no-transfer
-  scope explicit. It was inspected read-only at `C:\Users\DELL\PatchBond`.
+- The local source-consensus reference for deterministic validation, transaction timestamps,
+  strict post-consensus validation, and bounded model output. It was inspected read-only.
+- The local NimbusPact reference for response-shape checks and exact response hashing. It was
+  inspected read-only.
+- The local PatchBond reference for explicit access control, mutation gates, and no-transfer scope.
+  It was inspected read-only.
 
-The installed environment reported GenLayer CLI `0.39.1`. The contract dependency header uses the
-same pinned `py-genlayer` runner identifier used by the installed local GenLayer test corpus; the
-repository's verification commands must be rerun if that runner or the CLI is upgraded.
+The installed GenVM runner bundle was inspected directly. It provides deterministic integer
+arithmetic, SHA-256 through the standard runtime, and Keccak, but no built-in ECDSA/Ed25519 verifier
+and no approved host crypto dependency for contract use. DatasetBond therefore implements the
+documented pure-Python secp256k1 verifier inside the contract; test-only signing uses the client
+environment's `eth_keys` package and never enters the contract source.
 
-These are design and API provenance references, not claims that DatasetBond inherits their product
-semantics or security guarantees.
+The installed environment reported GenLayer CLI `0.39.1`, `genlayer-test` `0.29.2`, and
+`genvm-linter` `0.10.0`. The contract remains pinned to the existing `py-genlayer` runner header;
+verification must be repeated if that runner or CLI is upgraded.
+
+These references describe API/design provenance only. They are not claims that DatasetBond inherits
+the other projects' semantics or security guarantees.

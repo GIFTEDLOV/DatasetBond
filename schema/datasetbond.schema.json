@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract": "DatasetBond",
   "identifier": "dataset_id",
+  "authentication_mode": "SIGNED_ISSUER_REQUIRED",
   "verdicts": ["CERTIFIED", "NOT_CERTIFIED", "INCONCLUSIVE"],
   "statuses": ["REGISTERED", "CERTIFIED", "NOT_CERTIFIED", "INCONCLUSIVE", "REVOKED"],
   "profiles": [
@@ -14,12 +15,17 @@
     "method": "register_dataset",
     "arguments": [
       {"name": "dataset_id", "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,95}$"},
-      {"name": "dataset_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "dataset_reference", "type": "content_or_commit_addressed_https_reference", "max_chars": 512},
       {"name": "dataset_sha256", "type": "sha256_hex_lower", "chars": 64},
-      {"name": "license_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "license_reference", "type": "content_or_commit_addressed_https_reference", "max_chars": 512},
       {"name": "license_sha256", "type": "sha256_hex_lower", "chars": 64},
-      {"name": "provenance_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "provenance_reference", "type": "content_or_commit_addressed_https_reference", "max_chars": 512},
       {"name": "provenance_sha256", "type": "sha256_hex_lower", "chars": 64},
+      {"name": "evidence_manifest_reference", "type": "signed_https_locator", "max_chars": 512},
+      {"name": "evidence_manifest_sha256", "type": "sha256_hex_lower", "chars": 64},
+      {"name": "manifest_id", "type": "identifier", "max_chars": 96},
+      {"name": "publisher_identity", "type": "issuer_identifier", "max_chars": 96},
+      {"name": "key_id", "type": "issuer_key_identifier", "max_chars": 96},
       {"name": "usage_profile", "type": "enum", "values": [
         "RESEARCH_EVALUATION",
         "MODEL_TRAINING",
@@ -29,6 +35,37 @@
     ],
     "returns": "dataset_id",
     "network_or_model_work": false
+  },
+  "issuer_registration": {
+    "method": "register_issuer_key",
+    "arguments": [
+      {"name": "issuer_id", "type": "identifier", "max_chars": 96},
+      {"name": "key_id", "type": "issuer_key_identifier", "max_chars": 96},
+      {"name": "public_key", "type": "secp256k1_uncompressed_x_y_lower_hex", "chars": 128},
+      {"name": "signature_algorithm", "type": "literal", "value": "SECP256K1_ECDSA_SHA256"}
+    ],
+    "returns": "IssuerKey",
+    "authorization": "deployer trust root only"
+  },
+  "issuer_revocation": {
+    "method": "revoke_issuer_key",
+    "arguments": [
+      {"name": "key_id", "type": "issuer_key_identifier"},
+      {"name": "reason", "type": "string", "max_chars": 240}
+    ],
+    "returns": "IssuerKey",
+    "authorization": "deployer trust root only"
+  },
+  "issuer_rotation": {
+    "method": "rotate_issuer_key",
+    "arguments": [
+      {"name": "issuer_id", "type": "identifier"},
+      {"name": "old_key_id", "type": "issuer_key_identifier"},
+      {"name": "new_key_id", "type": "issuer_key_identifier"},
+      {"name": "new_public_key", "type": "secp256k1_uncompressed_x_y_lower_hex", "chars": 128}
+    ],
+    "returns": "IssuerKey",
+    "authorization": "deployer trust root only"
   },
   "certification": {
     "method": "certify_dataset",
@@ -51,7 +88,11 @@
     {"method": "get_certificate", "arguments": ["dataset_id"], "returns": "Certificate"},
     {"method": "get_certificates", "arguments": [], "returns": "map<string, Certificate>"},
     {"method": "get_certificate_ids", "arguments": [], "returns": "list<string>"},
-    {"method": "get_certificate_count", "arguments": [], "returns": "u256"}
+    {"method": "get_certificate_count", "arguments": [], "returns": "u256"},
+    {"method": "get_trust_root", "arguments": [], "returns": "address_hex_string"},
+    {"method": "get_issuer_key", "arguments": ["key_id"], "returns": "IssuerKey"},
+    {"method": "get_issuer_keys", "arguments": [], "returns": "map<string, IssuerKey>"},
+    {"method": "get_issuer_key_count", "arguments": [], "returns": "u256"}
   ],
   "certificate_fields": {
     "certificate_id": "string",
@@ -62,6 +103,11 @@
     "license_sha256": "string",
     "provenance_reference": "string",
     "provenance_sha256": "string",
+    "evidence_manifest_reference": "string",
+    "evidence_manifest_sha256": "canonical_manifest_sha256",
+    "manifest_id": "string",
+    "publisher_identity": "string",
+    "key_id": "string",
     "usage_profile": "string",
     "submitter": "address_hex_string",
     "registered_at": "u256_unix_seconds",
@@ -71,14 +117,64 @@
     "verdict": "enum_or_empty_before_evaluation",
     "attempts": "u32",
     "certification_record": "canonical_json_string_or_empty",
-    "revocation_reason": "string_or_empty"
+    "revocation_reason": "string_or_empty",
+    "integrity_status": "enum",
+    "authentication_status": "enum",
+    "license_status": "enum",
+    "provenance_status": "enum",
+    "scope_statement": "fixed_non_claim_statement"
+  },
+  "issuer_key_fields": {
+    "issuer_id": "string",
+    "key_id": "string",
+    "signature_algorithm": "SECP256K1_ECDSA_SHA256",
+    "public_key": "128 lowercase hex characters containing x||y",
+    "status": ["ACTIVE", "REVOKED", "ROTATED"],
+    "registered_at": "u256_unix_seconds",
+    "revoked_at": "u256_unix_seconds_or_zero",
+    "successor_key_id": "string_or_empty",
+    "administration_reason": "string_or_empty"
+  },
+  "signed_manifest": {
+    "canonical_encoding": "UTF-8 JSON, sorted keys, no insignificant whitespace, ensure_ascii=false",
+    "signature_input": "canonical manifest JSON with signature field removed",
+    "fields": [
+      "manifest_id",
+      "manifest_version",
+      "dataset_id",
+      "dataset_reference",
+      "dataset_sha256",
+      "license_reference",
+      "license_sha256",
+      "provenance_reference",
+      "provenance_sha256",
+      "usage_profile",
+      "publisher_identity",
+      "key_id",
+      "issued_at",
+      "expires_at",
+      "signature_algorithm",
+      "signature"
+    ],
+    "signature_format": "lowercase hex r||s, 64 bytes, low-s ECDSA",
+    "manifest_version": 2
+  },
+  "level_statuses": {
+    "integrity_status": ["NOT_EVALUATED", "VERIFIED", "UNAVAILABLE", "INVALID_RESPONSE", "DIGEST_MISMATCH"],
+    "authentication_status": [
+      "NOT_EVALUATED", "AUTHENTICATED", "UNREGISTERED_ISSUER", "REVOKED_ISSUER", "ROTATED_KEY",
+      "INVALID_SIGNATURE", "EXPIRED", "NOT_YET_VALID", "REPLAYED", "MANIFEST_MISMATCH",
+      "MALFORMED_MANIFEST", "CANONICALIZATION_MISMATCH"
+    ],
+    "license_status": ["NOT_EVALUATED", "COMPATIBLE", "INCOMPATIBLE", "INCONCLUSIVE"],
+    "provenance_status": ["NOT_EVALUATED", "COMPLETE", "INCOMPLETE", "INCONCLUSIVE"]
   },
   "provenance_manifest_minimum": {
     "dataset_reference": "exactly registered dataset_reference",
     "dataset_sha256": "exactly registered dataset_sha256",
     "license_reference": "exactly registered license_reference",
     "license_sha256": "exactly registered license_sha256",
-    "publisher": "non-empty string",
+    "publisher": "exact signed publisher_identity",
     "source": "non-empty string",
     "version": "non-empty string",
     "created_at": "timezone-qualified ISO-8601 string",
@@ -88,7 +184,17 @@
     "dataset_bytes": 1048576,
     "license_bytes": 16384,
     "provenance_manifest_bytes": 32768,
+    "evidence_manifest_bytes": 16384,
     "prompt_chars": 52000,
-    "certification_record_chars": 4096
-  }
+    "certification_record_chars": 4096,
+    "signature_lifetime_seconds": 31622400,
+    "certification_attempts": 100
+  },
+  "scope_non_claims": [
+    "dataset factual correctness",
+    "legal ownership",
+    "legal enforceability",
+    "absence of undisclosed source material",
+    "permanent availability of external URLs"
+  ]
 }

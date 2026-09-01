@@ -1,50 +1,57 @@
-# Security model and limitations
+# DatasetBond v2 security model
 
-## Integrity versus authority
+## Exact cryptographic model
 
-DatasetBond proves an integrity statement: at evaluation time a supported GenLayer web request
-returned HTTP 200 bytes whose SHA-256 matched the digest registered for that reference. The
-content-addressed or commit-pinned reference proves which location/version was requested.
+DatasetBond v2 uses `SECP256K1_ECDSA_SHA256`:
 
-That is not an authority statement. SHA-256 does not prove that a publisher authored the bytes,
-that a submitter has rights to the dataset, or that the URL is an official canonical source.
-Consumers must select authoritative/canonical license sources and document immutable publisher or
-registry sources. DatasetBond never treats validator consensus as authentication of the evidence.
+- issuer public keys are uncompressed secp256k1 `x||y`, 64 bytes / 128 lowercase hex characters;
+- signatures are low-`s` ECDSA `r||s`, 64 bytes / 128 lowercase hex characters;
+- the signed message is canonical UTF-8 JSON containing every manifest field except `signature`;
+- the signature hash is SHA-256 of those canonical unsigned bytes;
+- the complete canonical signed-manifest bytes are separately SHA-256 checked against the registered
+  `evidence_manifest_sha256`.
 
-## Security properties
+The verifier is implemented inside the contract with curve constants, point validation, bounded
+double-and-add scalar multiplication, modular arithmetic, SHA-256, and no external crypto import.
+This is a genuine cryptographic verification path in the installed GenVM runner, not a signature
+field check or a host-side dependency.
 
-- No frontend computes or submits the verdict.
-- Registration rejects mutable references, unsupported schemes, credentials, query/fragment
-  ambiguity, malformed digests, duplicate IDs, and oversized fields.
-- All three references are retrieved only through `gl.nondet.web.request`; response status, body
-  type, byte limit, UTF-8 requirements, and exact SHA-256 are checked.
-- Dataset bytes are hashed as bytes; license and manifest bytes are hashed before decoding or
-  prompt sanitisation.
-- The manifest must exactly link the registered dataset and license references/digests.
-- Evidence text is untrusted prompt data and cannot change the declared profile or contract state.
-- `gl.vm.run_nondet` validates the complete evidence fetch, manifest gate, model call, and bounded
-  result independently on a validator.
-- A second deterministic result-validation gate runs before storage.
-- No model explanation, confidence, score, authority claim, or factual-quality claim is stored.
-- Revocation is submitter-only, certified-only, bounded, and history-preserving.
-- There are no transfers, payable methods, admin keys, or hidden recovery paths.
+## Trust root and issuer scope
 
-## Known limitations
+The deployer is recorded as `trust_root`. Only that address can register, revoke, or rotate issuer
+keys. The registry authenticates that a specific public key was approved for an issuer identifier
+and is active at evaluation time. It does not authenticate the issuer's legal identity, ownership,
+rights, authorization, legal enforceability, or publisher status in the real world.
 
-- A validator-backed semantic verdict is not a legal opinion. License language can be jurisdiction-
-  specific, ambiguous, or inconsistent with external terms.
-- A submitter can register an immutable copy from an unauthoritative source. The contract preserves
-  integrity of that copy but cannot authenticate the publisher.
-- If validators cannot obtain equivalent web/model results, the transaction can fail consensus and
-  must be retried; the contract never guesses a positive result.
-- `INCONCLUSIVE` is the only answer for unavailable or insufficient evidence. It is not evidence
-  that the profile is violated.
-- The dataset response is bounded at 1 MiB. Larger datasets must be represented by a smaller,
-  immutable package or a separate content-addressed digest workflow.
-- The license and manifest prompt is bounded. Oversized content is `INCONCLUSIVE`, not truncated
-  into a misleading certification.
-- The manifest fields are claims supplied by the evidence package. Their presence is checked;
-  their real-world truth is not independently authenticated.
-- Certification does not prove dataset facts, labels, safety, bias, completeness, provenance truth,
-  ownership, or absence of personal data unless the committed evidence explicitly supports that
-  narrower claim and the profile is extended accordingly.
+Rotation marks the old key `ROTATED` and creates a new `ACTIVE` successor. Revocation marks a key
+`REVOKED`. Existing certificates preserve their historical authentication result; future
+certification attempts using those keys become `INCONCLUSIVE`.
+
+## Integrity and availability
+
+- Dataset, license, and referenced provenance URLs must be HTTPS content-addressed or commit-pinned
+  references. Ordinary HTTPS URLs are not called immutable.
+- The signed-manifest URL is a credential-free HTTPS locator. Its bytes are still exact-digest
+  checked and its content must be signed; the locator itself is not permanent.
+- All retrieval uses supported `gl.nondet.web.request` and requires HTTP 200 plus a byte response.
+- Oversized, malformed, unavailable, or digest-mismatched responses fail closed.
+- `UNAVAILABLE`, `INVALID_RESPONSE`, and `DIGEST_MISMATCH` remain distinct integrity outcomes.
+- A valid digest proves byte equality, not publisher authenticity.
+
+## Consensus and semantic boundary
+
+- Signed-manifest authentication happens before semantic evaluation.
+- Validators independently execute the same bounded evidence fetch, signature check, provenance
+  gate, and JSON-only model call inside nondeterministic evaluation.
+- The only model output accepted is exactly `{"verdict":"CERTIFIED|NOT_CERTIFIED|INCONCLUSIVE"}`.
+- Storage writes happen only after `gl.vm.run_nondet` and deterministic five-field result validation.
+- No frontend/backend computes or overrides the verdict, and no explanation, score, or confidence is
+  authoritative state.
+- Validator consensus is not authentication of evidence; it only establishes agreement about the
+  bounded evaluation.
+
+## Explicit non-claims
+
+Every returned certificate includes a fixed scope statement. DatasetBond does not prove dataset
+factual correctness, legal ownership, legal enforceability, absence of undisclosed source material,
+or permanent availability of external URLs.

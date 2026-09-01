@@ -1,38 +1,57 @@
-# Certification profiles
+# DatasetBond v2 certification profiles
 
-Profiles are deliberately small and explicit. They are not general-purpose dataset-quality
-rubrics. The model must find explicit license permission; silence, ambiguity, or a conclusion that
-depends on authenticating an unverified publisher is `INCONCLUSIVE`.
+Profiles are explicit licensing/provenance criteria, not general-purpose dataset-quality rubrics.
+Every v2 package requires a valid signed evidence manifest from an active trust-root key.
 
 | Profile | Required license meaning | Minimum provenance meaning |
 | --- | --- | --- |
-| `RESEARCH_EVALUATION` | Research and evaluation use explicitly permitted. | Publisher, source, version, creation/collection time, transformations. |
-| `MODEL_TRAINING` | Machine-learning or AI training explicitly permitted. | Publisher, source, version, creation/collection time, transformations. |
-| `COMMERCIAL_TRAINING` | Both commercial use and machine-learning/AI training explicitly permitted. | Publisher, source, version, creation/collection time, transformations. |
-| `REDISTRIBUTION` | Redistribution explicitly permitted, including required attribution/notice obligations. | Publisher, source, version, creation/collection time, transformations. |
+| `RESEARCH_EVALUATION` | Research and evaluation use explicitly permitted. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
+| `MODEL_TRAINING` | Machine-learning or AI training explicitly permitted. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
+| `COMMERCIAL_TRAINING` | Commercial use and machine-learning/AI training explicitly permitted. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
+| `REDISTRIBUTION` | Redistribution explicitly permitted, including attribution/notice obligations. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
 
-The provenance manifest must be UTF-8 JSON with at least:
+## Signed evidence manifest
+
+The canonical signed manifest contains exactly:
 
 ```json
 {
-  "dataset_reference": "the registered immutable reference",
-  "dataset_sha256": "the registered digest",
-  "license_reference": "the registered immutable reference",
-  "license_sha256": "the registered digest",
-  "publisher": "declared publisher or rights holder",
-  "source": "collection/source description",
-  "version": "dataset version",
-  "created_at": "timezone-qualified ISO-8601 collection or manifest creation time",
-  "transformations": ["normalization or transformation description"]
+  "manifest_id": "single-use-manifest",
+  "manifest_version": 2,
+  "dataset_id": "demo-dataset-1",
+  "dataset_reference": "registered content-addressed reference",
+  "dataset_sha256": "registered digest",
+  "license_reference": "registered content-addressed reference",
+  "license_sha256": "registered digest",
+  "provenance_reference": "registered content-addressed reference",
+  "provenance_sha256": "registered digest",
+  "usage_profile": "MODEL_TRAINING",
+  "publisher_identity": "example-publisher",
+  "key_id": "example-key-2026-a",
+  "issued_at": 1790000000,
+  "expires_at": 1790003600,
+  "signature_algorithm": "SECP256K1_ECDSA_SHA256",
+  "signature": "lowercase hex r||s"
 }
 ```
 
-The deterministic contract checks the four exact package links, required non-empty provenance
-fields, transformation bounds, duplicate JSON keys, JSON shape, and timezone-qualified ISO-8601
-`created_at`. It does not claim that a text
-field naming a publisher proves that publisher's identity.
+Its bytes are UTF-8 canonical JSON: lexicographically sorted keys, no insignificant whitespace,
+and `ensure_ascii=false`. The signature covers the same canonical object with `signature` removed.
+The manifest digest covers the complete signed bytes. `manifest_id` is tracked as single-use after
+a terminal certification result, so an `INCONCLUSIVE` attempt can be retried but a used manifest
+cannot be replayed for another certificate.
 
-A license should be referenced from a canonical authority such as the relevant SPDX, Creative
-Commons, Open Data Commons, Apache, or publisher-controlled immutable source. An immutable URL
-proves which bytes were retrieved; it does not prove that the host or submitter is authorized to
-issue those bytes.
+## Provenance completeness
+
+The referenced provenance manifest remains a separate exact evidence object. It must be UTF-8 JSON,
+link the exact registered dataset/license references and digests, repeat the signed
+`publisher_identity`, and contain non-empty `source`, `version`, timezone-qualified ISO-8601
+`created_at`, and at most 32 transformation descriptions. Those fields establish completeness and
+consistency only; they do not prove the real-world identity or legal authority of the named party.
+
+## License authority
+
+Consumers should select canonical license sources such as the relevant SPDX, Creative Commons, Open
+Data Commons, Apache, or publisher-controlled immutable source. The issuer registry authenticates
+control of a registered key over a manifest; it does not certify legal ownership, authorization,
+legal enforceability, or the truth of publisher claims.

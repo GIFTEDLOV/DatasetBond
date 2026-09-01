@@ -6,5 +6,10 @@
   "license_sha256": "replace-with-lowercase-sha256-of-exact-license-bytes",
   "provenance_reference": "https://raw.githubusercontent.com/acme/provenance/cccccccccccccccccccccccccccccccccccccccc/manifests/demo.json",
   "provenance_sha256": "replace-with-lowercase-sha256-of-exact-manifest-bytes",
+  "evidence_manifest_reference": "https://publisher.example/evidence-manifest/demo-v2.json",
+  "evidence_manifest_sha256": "replace-with-lowercase-sha256-of-exact-signed-manifest-bytes",
+  "manifest_id": "manifest-2026-01",
+  "publisher_identity": "example-publisher",
+  "key_id": "example-key-2026-a",
   "usage_profile": "MODEL_TRAINING"
 }
