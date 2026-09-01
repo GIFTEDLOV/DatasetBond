@@ -1,0 +1,29 @@
+{
+  "dataset_id": "datasetbond-demo-observations",
+  "description": "Self-owned DatasetBond demonstration observations for integration verification.",
+  "publisher": "DatasetBond project",
+  "records": [
+    {
+      "observation": "clear",
+      "record_id": "obs-001",
+      "region": "lagos-lagoon",
+      "reading": 28.4,
+      "unit": "celsius"
+    },
+    {
+      "observation": "light-rain",
+      "record_id": "obs-002",
+      "region": "abuja-hills",
+      "reading": 22.1,
+      "unit": "millimeters"
+    },
+    {
+      "observation": "clear",
+      "record_id": "obs-003",
+      "region": "ibadan-plains",
+      "reading": 63.0,
+      "unit": "percent-humidity"
+    }
+  ],
+  "version": "1.0.0"
+}
