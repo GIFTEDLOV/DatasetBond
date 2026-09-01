@@ -1,0 +1,10 @@
+{
+  "dataset_id": "demo-dataset-1",
+  "dataset_reference": "https://raw.githubusercontent.com/acme/datasets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/data.csv",
+  "dataset_sha256": "replace-with-lowercase-sha256-of-exact-dataset-bytes",
+  "license_reference": "https://raw.githubusercontent.com/spdx/license-list-data/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/licenses/MIT.json",
+  "license_sha256": "replace-with-lowercase-sha256-of-exact-license-bytes",
+  "provenance_reference": "https://raw.githubusercontent.com/acme/provenance/cccccccccccccccccccccccccccccccccccccccc/manifests/demo.json",
+  "provenance_sha256": "replace-with-lowercase-sha256-of-exact-manifest-bytes",
+  "usage_profile": "MODEL_TRAINING"
+}

@@ -1,0 +1,22 @@
+[project]
+name = "datasetbond"
+version = "0.1.0"
+description = "A bounded GenLayer dataset-license and provenance certification primitive."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -p no:cacheprovider"
+pythonpath = ["."]
+markers = [
+  "integration: requires GenLayer Studio or a configured gltest network",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.gltest]
+contracts_dir = "contracts"

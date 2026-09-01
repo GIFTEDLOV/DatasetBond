@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "contract": "DatasetBond",
+  "identifier": "dataset_id",
+  "verdicts": ["CERTIFIED", "NOT_CERTIFIED", "INCONCLUSIVE"],
+  "statuses": ["REGISTERED", "CERTIFIED", "NOT_CERTIFIED", "INCONCLUSIVE", "REVOKED"],
+  "profiles": [
+    "RESEARCH_EVALUATION",
+    "MODEL_TRAINING",
+    "COMMERCIAL_TRAINING",
+    "REDISTRIBUTION"
+  ],
+  "registration": {
+    "method": "register_dataset",
+    "arguments": [
+      {"name": "dataset_id", "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,95}$"},
+      {"name": "dataset_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "dataset_sha256", "type": "sha256_hex_lower", "chars": 64},
+      {"name": "license_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "license_sha256", "type": "sha256_hex_lower", "chars": 64},
+      {"name": "provenance_reference", "type": "immutable_https_reference", "max_chars": 512},
+      {"name": "provenance_sha256", "type": "sha256_hex_lower", "chars": 64},
+      {"name": "usage_profile", "type": "enum", "values": [
+        "RESEARCH_EVALUATION",
+        "MODEL_TRAINING",
+        "COMMERCIAL_TRAINING",
+        "REDISTRIBUTION"
+      ]}
+    ],
+    "returns": "dataset_id",
+    "network_or_model_work": false
+  },
+  "certification": {
+    "method": "certify_dataset",
+    "arguments": [{"name": "dataset_id", "type": "string"}],
+    "returns": "Certificate",
+    "network_and_model_work": "GenLayer nondeterministic boundary only",
+    "model_output": {"exact_keys": ["verdict"], "verdicts": ["CERTIFIED", "NOT_CERTIFIED", "INCONCLUSIVE"]}
+  },
+  "revocation": {
+    "method": "revoke_certificate",
+    "arguments": [
+      {"name": "dataset_id", "type": "string"},
+      {"name": "reason", "type": "string", "max_chars": 240}
+    ],
+    "returns": "Certificate",
+    "authorization": "original submitter only",
+    "precondition": "status == CERTIFIED"
+  },
+  "views": [
+    {"method": "get_certificate", "arguments": ["dataset_id"], "returns": "Certificate"},
+    {"method": "get_certificates", "arguments": [], "returns": "map<string, Certificate>"},
+    {"method": "get_certificate_ids", "arguments": [], "returns": "list<string>"},
+    {"method": "get_certificate_count", "arguments": [], "returns": "u256"}
+  ],
+  "certificate_fields": {
+    "certificate_id": "string",
+    "dataset_id": "string",
+    "dataset_reference": "string",
+    "dataset_sha256": "string",
+    "license_reference": "string",
+    "license_sha256": "string",
+    "provenance_reference": "string",
+    "provenance_sha256": "string",
+    "usage_profile": "string",
+    "submitter": "address_hex_string",
+    "registered_at": "u256_unix_seconds",
+    "evaluated_at": "u256_unix_seconds",
+    "revoked_at": "u256_unix_seconds_or_zero",
+    "status": "enum",
+    "verdict": "enum_or_empty_before_evaluation",
+    "attempts": "u32",
+    "certification_record": "canonical_json_string_or_empty",
+    "revocation_reason": "string_or_empty"
+  },
+  "provenance_manifest_minimum": {
+    "dataset_reference": "exactly registered dataset_reference",
+    "dataset_sha256": "exactly registered dataset_sha256",
+    "license_reference": "exactly registered license_reference",
+    "license_sha256": "exactly registered license_sha256",
+    "publisher": "non-empty string",
+    "source": "non-empty string",
+    "version": "non-empty string",
+    "created_at": "timezone-qualified ISO-8601 string",
+    "transformations": "list of at most 32 non-empty strings"
+  },
+  "evidence_limits": {
+    "dataset_bytes": 1048576,
+    "license_bytes": 16384,
+    "provenance_manifest_bytes": 32768,
+    "prompt_chars": 52000,
+    "certification_record_chars": 4096
+  }
+}
