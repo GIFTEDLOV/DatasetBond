@@ -1,4 +1,4 @@
-# DatasetBond v2 architecture
+# DatasetBond v2.1 architecture
 
 ## Product and trust problem
 
@@ -7,7 +7,7 @@ to the exact bytes reviewed. DatasetBond answers one narrower question:
 
 > Does this exact, committed evidence package satisfy the declared use profile?
 
-Version 2 adds a signed evidence manifest and a deployer-controlled issuer trust root. It separates
+Version 2.1 adds a signed inline evidence manifest and a deployer-controlled issuer trust root. It separates
 what the contract can verify from what it cannot claim: byte integrity, key authentication, license
 compatibility, provenance completeness, and final certification are stored as separate levels.
 
@@ -21,17 +21,16 @@ write after consensus and asks validators only for a bounded semantic verdict.
 The supported flow is:
 
 1. The deployer becomes the trust root and registers issuer verification keys.
-2. A submitter registers exact dataset/license/provenance references and their digests, plus the
-   signed evidence-manifest locator/digest and the manifest's identity fields.
-3. Validators fetch the signed manifest through `gl.nondet.web.request`, require exact bytes and
-   the committed SHA-256, enforce canonical JSON, and verify its secp256k1 ECDSA signature.
-4. The contract checks the issuer key, key status, signed package binding, time window, and one-use
-   `manifest_id` replay map before fetching semantic evidence.
-5. Validators fetch the dataset, license, and provenance manifest, require HTTP 200 byte bodies,
+2. A submitter supplies one bounded canonical JSON manifest inline with exact dataset/license/
+   provenance references and their digests. Registration parses it, rejects unknown/missing fields,
+   checks its complete SHA-256, and binds every field to the registration arguments.
+3. Certification reconstructs the anchored canonical manifest, checks its digest, validity window,
+   issuer key status, nonce replay map, and low-s ECDSA signature before any semantic work.
+4. Validators fetch only the dataset, license, and provenance manifest, require HTTP 200 byte bodies,
    size bounds, UTF-8 where required, exact SHA-256, and a complete linked provenance shape.
-6. `gl.nondet.exec_prompt(..., response_format="json")` receives only license/provenance evidence
+5. `gl.nondet.exec_prompt(..., response_format="json")` receives only license/provenance evidence
    and may return exactly `CERTIFIED`, `NOT_CERTIFIED`, or `INCONCLUSIVE`.
-7. `gl.vm.run_nondet` reruns the complete bounded evaluation on a validator and the deterministic
+6. `gl.vm.run_nondet` reruns the complete bounded evaluation on a validator and the deterministic
    path revalidates all five result fields before storing state.
 
 ## Cryptographic boundary
@@ -50,16 +49,17 @@ dataset, has authority to license it, or that the license is enforceable.
 ## Authority versus integrity
 
 The three evidence references must be content-addressed or commit-pinned HTTPS references. The
-signed-manifest locator may be an ordinary credential-free HTTPS locator because its exact bytes
-are digest-checked and its content is signed; the locator itself is not described as immutable.
-Neither an HTTPS URL nor SHA-256 is publisher authentication. The trust root and issuer registry
-are the additional authentication authority, and their scope is deliberately narrow.
+signed manifest has no external locator: its canonical UTF-8 bytes are supplied at registration and
+anchored by `evidence_manifest_sha256`. The contract stores the digest and bounded signed fields,
+then reconstructs the exact canonical object for certification. Neither an HTTPS URL nor SHA-256 is
+publisher authentication. The trust root and issuer registry are the additional authentication
+authority, and their scope is deliberately narrow.
 
 ## Failure semantics
 
 - Registration validates only deterministic fields and never performs web or model work.
-- Signed-manifest unavailability, invalid response shape, or digest mismatch is recorded as an
-  integrity failure and yields `INCONCLUSIVE`.
+- A malformed, non-canonical, digest-mismatched, or argument-mismatched inline manifest is rejected
+  at registration; a later digest/canonical reconstruction failure is an authentication failure.
 - An unregistered, revoked, rotated, expired, replayed, malformed, non-canonical, or incorrectly
   signed manifest is recorded as an authentication failure and yields `INCONCLUSIVE`.
 - Dataset/license/provenance availability and digest failures remain distinct from authentication.

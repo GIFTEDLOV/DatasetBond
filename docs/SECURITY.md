@@ -1,15 +1,16 @@
-# DatasetBond v2 security model
+# DatasetBond v2.1 security model
 
 ## Exact cryptographic model
 
-DatasetBond v2 uses `SECP256K1_ECDSA_SHA256`:
+DatasetBond v2.1 uses `SECP256K1_ECDSA_SHA256`:
 
 - issuer public keys are uncompressed secp256k1 `x||y`, 64 bytes / 128 lowercase hex characters;
 - signatures are low-`s` ECDSA `r||s`, 64 bytes / 128 lowercase hex characters;
 - the signed message is canonical UTF-8 JSON containing every manifest field except `signature`;
 - the signature hash is SHA-256 of those canonical unsigned bytes;
 - the complete canonical signed-manifest bytes are separately SHA-256 checked against the registered
-  `evidence_manifest_sha256`.
+`evidence_manifest_sha256`. The complete signed manifest is supplied inline at registration; no
+manifest URL is fetched during certification.
 
 The verifier is implemented inside the contract with curve constants, point validation, bounded
 double-and-add scalar multiplication, modular arithmetic, SHA-256, and no external crypto import.
@@ -31,8 +32,10 @@ certification attempts using those keys become `INCONCLUSIVE`.
 
 - Dataset, license, and referenced provenance URLs must be HTTPS content-addressed or commit-pinned
   references. Ordinary HTTPS URLs are not called immutable.
-- The signed-manifest URL is a credential-free HTTPS locator. Its bytes are still exact-digest
-  checked and its content must be signed; the locator itself is not permanent.
+- The dataset, license, and provenance references are credential-free HTTPS references that must be
+  commit- or content-addressed. They are availability locators, not publisher authentication.
+- The inline manifest digest and the stored bounded signed fields are reconstructed and checked
+  before any nondeterministic evidence retrieval.
 - All retrieval uses supported `gl.nondet.web.request` and requires HTTP 200 plus a byte response.
 - Oversized, malformed, unavailable, or digest-mismatched responses fail closed.
 - `UNAVAILABLE`, `INVALID_RESPONSE`, and `DIGEST_MISMATCH` remain distinct integrity outcomes.
@@ -40,7 +43,7 @@ certification attempts using those keys become `INCONCLUSIVE`.
 
 ## Consensus and semantic boundary
 
-- Signed-manifest authentication happens before semantic evaluation.
+- Inline signed-manifest authentication happens before semantic evaluation.
 - Validators independently execute the same bounded evidence fetch, signature check, provenance
   gate, and JSON-only model call inside nondeterministic evaluation.
 - The only model output accepted is exactly `{"verdict":"CERTIFIED|NOT_CERTIFIED|INCONCLUSIVE"}`.

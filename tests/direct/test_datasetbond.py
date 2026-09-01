@@ -1,4 +1,4 @@
-"""Direct and consensus-shaped DatasetBond v2 tests."""
+"""Direct and consensus-shaped DatasetBond v2.1 tests."""
 
 from __future__ import annotations
 
@@ -35,11 +35,6 @@ PROVENANCE_REFERENCE_TWO = (
     "https://raw.githubusercontent.com/acme/provenance/"
     "ffffffffffffffffffffffffffffffffffffffff/manifests/demo.json"
 )
-EVIDENCE_MANIFEST_REFERENCE = (
-    "https://raw.githubusercontent.com/acme/evidence/"
-    "1111111111111111111111111111111111111111/manifests/demo-v2.json"
-)
-
 DATASET_BYTES = b"id,value\n1,example\n"
 LICENSE_BYTES = (
     b"SPDX-License-Identifier: MIT\n"
@@ -50,8 +45,8 @@ ISSUER_ID = "example-publisher"
 KEY_ONE_ID = "example-key-2026-a"
 KEY_TWO_ID = "example-key-2026-b"
 # Test-only keys are derived at runtime from labels; no raw private key is committed.
-PRIVATE_ONE = keys.PrivateKey(hashlib.sha256(b"DatasetBond v2 test-only key one").digest())
-PRIVATE_TWO = keys.PrivateKey(hashlib.sha256(b"DatasetBond v2 test-only key two").digest())
+PRIVATE_ONE = keys.PrivateKey(hashlib.sha256(b"DatasetBond v2.1 test-only key one").digest())
+PRIVATE_TWO = keys.PrivateKey(hashlib.sha256(b"DatasetBond v2.1 test-only key two").digest())
 
 
 def sha256(raw: bytes) -> str:
@@ -105,7 +100,7 @@ def package(
     dataset_reference: str = DATASET_REFERENCE,
     license_reference: str = LICENSE_REFERENCE,
     provenance_reference: str = PROVENANCE_REFERENCE,
-    manifest_id: str = "manifest-2026-01",
+    nonce: str = "manifest-2026-01",
     publisher_identity: str = ISSUER_ID,
     key_id: str = KEY_ONE_ID,
     usage_profile: str = "COMMERCIAL_TRAINING",
@@ -127,7 +122,7 @@ def package(
         publisher_identity,
     )
     signed_payload = {
-        "manifest_id": manifest_id,
+        "nonce": nonce,
         "manifest_version": 2,
         "dataset_id": dataset_id,
         "dataset_reference": dataset_reference,
@@ -152,9 +147,9 @@ def package(
         "license_sha256": license_digest,
         "provenance_reference": provenance_reference,
         "provenance_sha256": sha256(exact_provenance_body),
-        "evidence_manifest_reference": EVIDENCE_MANIFEST_REFERENCE,
+        "evidence_manifest": exact_evidence_manifest_body.decode("utf-8"),
         "evidence_manifest_sha256": sha256(exact_evidence_manifest_body),
-        "manifest_id": manifest_id,
+        "nonce": nonce,
         "publisher_identity": publisher_identity,
         "key_id": key_id,
         "usage_profile": usage_profile,
@@ -195,17 +190,12 @@ def mock_package(
     dataset_body: bytes = DATASET_BYTES,
     license_body: bytes = LICENSE_BYTES,
     provenance_body: bytes | None = None,
-    evidence_manifest_body: bytes | None = None,
     status: int = 200,
     model_response: dict | str | None = None,
 ) -> None:
     direct_vm.clear_mocks()
     exact_provenance_body = pkg["_provenance_body"] if provenance_body is None else provenance_body
-    exact_evidence_manifest_body = (
-        pkg["_evidence_manifest_body"] if evidence_manifest_body is None else evidence_manifest_body
-    )
     for reference, response_body in (
-        (pkg["evidence_manifest_reference"], exact_evidence_manifest_body),
         (pkg["dataset_reference"], dataset_body),
         (pkg["license_reference"], license_body),
         (pkg["provenance_reference"], exact_provenance_body),
@@ -245,6 +235,12 @@ def test_valid_signature_certifies_and_exposes_separate_levels(
     assert cert["license_status"] == "COMPATIBLE"
     assert cert["provenance_status"] == "COMPLETE"
     assert cert["evidence_manifest_sha256"] == pkg["evidence_manifest_sha256"]
+    assert cert["nonce"] == pkg["nonce"]
+    assert cert["publisher_identity"] == ISSUER_ID
+    assert cert["key_id"] == KEY_ONE_ID
+    assert cert["usage_profile"] == pkg["usage_profile"]
+    assert cert["manifest_signature"] == json.loads(pkg["evidence_manifest"])["signature"]
+    assert all(key != "evidence_" + "manifest_reference" for key in cert)
     assert cert["scope_statement"].count("does not prove") == 1
     assert "explanation" not in cert["certification_record"]
 
@@ -277,7 +273,7 @@ def test_verified_license_incompatibility_is_not_certified(
     pkg["provenance_sha256"] = sha256(pkg["_provenance_body"])
     pkg["_evidence_manifest_body"] = sign_manifest(
         {
-            "manifest_id": pkg["manifest_id"],
+            "nonce": pkg["nonce"],
             "manifest_version": 2,
             "dataset_id": pkg["dataset_id"],
             "dataset_reference": pkg["dataset_reference"],
@@ -295,6 +291,7 @@ def test_verified_license_incompatibility_is_not_certified(
         },
         PRIVATE_ONE,
     )
+    pkg["evidence_manifest"] = pkg["_evidence_manifest_body"].decode("utf-8")
     pkg["evidence_manifest_sha256"] = sha256(pkg["_evidence_manifest_body"])
     register(direct_vm, contract, direct_alice, pkg)
     mock_package(direct_vm, pkg, license_body=incompatible_license, model_response={"verdict": "NOT_CERTIFIED"})
@@ -312,6 +309,7 @@ def test_altered_manifest_fails_signature_verification(direct_vm, direct_deploy,
     replacement = b"0" if altered[signature_start : signature_start + 1] != b"0" else b"1"
     altered = altered[:signature_start] + replacement + altered[signature_start + 1 :]
     pkg["_evidence_manifest_body"] = altered
+    pkg["evidence_manifest"] = altered.decode("utf-8")
     pkg["evidence_manifest_sha256"] = sha256(altered)
     register(direct_vm, contract, direct_alice, pkg)
     mock_package(direct_vm, pkg, model_response={"verdict": "CERTIFIED"})
@@ -325,10 +323,8 @@ def test_changed_usage_profile_is_rejected_by_signed_binding(direct_vm, direct_d
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
     pkg = package(direct_vm)
     pkg["usage_profile"] = "MODEL_TRAINING"
-    register(direct_vm, contract, direct_alice, pkg)
-    mock_package(direct_vm, pkg, model_response={"verdict": "CERTIFIED"})
-    cert = contract.certify_dataset(pkg["dataset_id"])
-    assert cert["authentication_status"] == "MANIFEST_MISMATCH"
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MANIFEST_MISMATCH"):
+        register(direct_vm, contract, direct_alice, pkg)
 
 
 def test_wrong_signer_is_not_authenticated(direct_vm, direct_deploy, direct_owner, direct_alice):
@@ -377,7 +373,7 @@ def test_key_rotation_invalidates_old_key_and_accepts_successor(
             ISSUER_ID, KEY_ONE_ID, KEY_TWO_ID, public_key_hex(PRIVATE_TWO)
         )
     assert rotated["status"] == "ACTIVE"
-    old_pkg = package(direct_vm, manifest_id="old-key-manifest")
+    old_pkg = package(direct_vm, nonce="old-key-manifest")
     register(direct_vm, contract, direct_alice, old_pkg)
     mock_package(direct_vm, old_pkg, model_response={"verdict": "CERTIFIED"})
     assert contract.certify_dataset(old_pkg["dataset_id"])["authentication_status"] == "ROTATED_KEY"
@@ -385,7 +381,7 @@ def test_key_rotation_invalidates_old_key_and_accepts_successor(
     new_pkg = package(
         direct_vm,
         dataset_id="new-key-dataset",
-        manifest_id="new-key-manifest",
+        nonce="new-key-manifest",
         key_id=KEY_TWO_ID,
         private_key=PRIVATE_TWO,
     )
@@ -394,26 +390,65 @@ def test_key_rotation_invalidates_old_key_and_accepts_successor(
     assert contract.certify_dataset(new_pkg["dataset_id"])["status"] == "CERTIFIED"
 
 
-def test_canonicalization_mismatch_is_inconclusive(direct_vm, direct_deploy, direct_owner, direct_alice):
+def test_canonicalization_mismatch_is_rejected_at_registration(direct_vm, direct_deploy, direct_owner, direct_alice):
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
     pkg = package(direct_vm)
     pretty = json.dumps(json.loads(pkg["_evidence_manifest_body"]), sort_keys=True, indent=2).encode("utf-8")
     pkg["_evidence_manifest_body"] = pretty
+    pkg["evidence_manifest"] = pretty.decode("utf-8")
     pkg["evidence_manifest_sha256"] = sha256(pretty)
-    register(direct_vm, contract, direct_alice, pkg)
-    mock_package(direct_vm, pkg, model_response={"verdict": "CERTIFIED"})
-    assert contract.certify_dataset(pkg["dataset_id"])["authentication_status"] == "CANONICALIZATION_MISMATCH"
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("CANONICALIZATION_MISMATCH"):
+        register(direct_vm, contract, direct_alice, pkg)
 
 
-def test_malformed_signature_is_inconclusive(direct_vm, direct_deploy, direct_owner, direct_alice):
+def test_malformed_signature_is_rejected_at_registration(direct_vm, direct_deploy, direct_owner, direct_alice):
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
     pkg = package(direct_vm)
     malformed = re.sub(rb'"signature":"[0-9a-f]+"', b'"signature":"not-hex"', pkg["_evidence_manifest_body"])
     pkg["_evidence_manifest_body"] = malformed
+    pkg["evidence_manifest"] = malformed.decode("utf-8")
     pkg["evidence_manifest_sha256"] = sha256(malformed)
-    register(direct_vm, contract, direct_alice, pkg)
-    mock_package(direct_vm, pkg, model_response={"verdict": "CERTIFIED"})
-    assert contract.certify_dataset(pkg["dataset_id"])["authentication_status"] == "MALFORMED_MANIFEST"
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MALFORMED_MANIFEST"):
+        register(direct_vm, contract, direct_alice, pkg)
+
+
+def test_manifest_digest_mismatch_is_rejected_at_registration(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
+    pkg = package(direct_vm)
+    pkg["evidence_manifest_sha256"] = "0" * 64
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MANIFEST_DIGEST_MISMATCH"):
+        register(direct_vm, contract, direct_alice, pkg)
+
+
+def test_malformed_inline_manifest_is_rejected_at_registration(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
+    pkg = package(direct_vm)
+    pkg["evidence_manifest"] = "not-json"
+    pkg["evidence_manifest_sha256"] = sha256(b"not-json")
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MALFORMED_MANIFEST"):
+        register(direct_vm, contract, direct_alice, pkg)
+
+
+@pytest.mark.parametrize("mutation", ["unknown", "missing"])
+def test_inline_manifest_rejects_unknown_or_missing_fields(
+    direct_vm, direct_deploy, direct_owner, direct_alice, mutation
+):
+    contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
+    pkg = package(direct_vm)
+    manifest = json.loads(pkg["evidence_manifest"])
+    if mutation == "unknown":
+        manifest["unexpected"] = "rejected"
+    else:
+        del manifest["nonce"]
+    malformed = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    pkg["evidence_manifest"] = malformed.decode("utf-8")
+    pkg["evidence_manifest_sha256"] = sha256(malformed)
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MALFORMED_MANIFEST"):
+        register(direct_vm, contract, direct_alice, pkg)
 
 
 @pytest.mark.parametrize("field", ["dataset", "license", "provenance"])
@@ -435,11 +470,8 @@ def test_altered_registered_digests_break_signed_manifest_binding(
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
     pkg = package(direct_vm)
     pkg[field] = "0" * 64
-    register(direct_vm, contract, direct_alice, pkg)
-    mock_package(direct_vm, pkg, model_response={"verdict": "CERTIFIED"})
-    cert = contract.certify_dataset(pkg["dataset_id"])
-    assert cert["authentication_status"] == "MANIFEST_MISMATCH"
-    assert cert["status"] == "INCONCLUSIVE"
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("MANIFEST_MISMATCH"):
+        register(direct_vm, contract, direct_alice, pkg)
 
 
 @pytest.mark.parametrize("failure_status", [404, 503])
@@ -452,7 +484,7 @@ def test_unavailable_source_is_distinct_from_digest_mismatch(
     mock_package(direct_vm, pkg, status=failure_status)
     cert = contract.certify_dataset(pkg["dataset_id"])
     assert cert["integrity_status"] == "UNAVAILABLE"
-    assert cert["authentication_status"] == "NOT_EVALUATED"
+    assert cert["authentication_status"] == "AUTHENTICATED"
 
 
 def test_malformed_provenance_manifest_is_inconclusive(
@@ -469,9 +501,9 @@ def test_malformed_provenance_manifest_is_inconclusive(
     assert cert["provenance_status"] == "INCOMPLETE"
 
 
-def test_replayed_manifest_id_is_inconclusive(direct_vm, direct_deploy, direct_owner, direct_alice):
+def test_replayed_nonce_is_inconclusive(direct_vm, direct_deploy, direct_owner, direct_alice):
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
-    first = package(direct_vm, manifest_id="single-use-manifest")
+    first = package(direct_vm, nonce="single-use-manifest")
     register(direct_vm, contract, direct_alice, first)
     mock_package(direct_vm, first, model_response={"verdict": "CERTIFIED"})
     assert contract.certify_dataset(first["dataset_id"])["status"] == "CERTIFIED"
@@ -482,7 +514,7 @@ def test_replayed_manifest_id_is_inconclusive(direct_vm, direct_deploy, direct_o
         dataset_reference=DATASET_REFERENCE_TWO,
         license_reference=LICENSE_REFERENCE_TWO,
         provenance_reference=PROVENANCE_REFERENCE_TWO,
-        manifest_id="single-use-manifest",
+        nonce="single-use-manifest",
     )
     register(direct_vm, contract, direct_alice, second)
     mock_package(direct_vm, second, model_response={"verdict": "CERTIFIED"})
@@ -518,6 +550,15 @@ def test_mutable_url_is_rejected_at_registration(direct_vm, direct_deploy, direc
     contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
     pkg = package(direct_vm, dataset_reference="https://example.com/dataset.csv")
     with direct_vm.prank(direct_alice), direct_vm.expect_revert("immutable"):
+        register(direct_vm, contract, direct_alice, pkg)
+
+
+def test_unsupported_reference_scheme_is_rejected_at_registration(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = deploy_with_key(direct_vm, direct_deploy, direct_owner)
+    pkg = package(direct_vm, dataset_reference="ipfs://bafybeigdyrzt4example/data.csv")
+    with direct_vm.prank(direct_alice), direct_vm.expect_revert("https://"):
         register(direct_vm, contract, direct_alice, pkg)
 
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 2.1,
   "contract": "DatasetBond",
   "identifier": "dataset_id",
   "authentication_mode": "SIGNED_ISSUER_REQUIRED",
@@ -21,9 +21,9 @@
       {"name": "license_sha256", "type": "sha256_hex_lower", "chars": 64},
       {"name": "provenance_reference", "type": "content_or_commit_addressed_https_reference", "max_chars": 512},
       {"name": "provenance_sha256", "type": "sha256_hex_lower", "chars": 64},
-      {"name": "evidence_manifest_reference", "type": "signed_https_locator", "max_chars": 512},
+      {"name": "evidence_manifest", "type": "bounded_inline_canonical_signed_manifest_json", "max_bytes": 16384},
       {"name": "evidence_manifest_sha256", "type": "sha256_hex_lower", "chars": 64},
-      {"name": "manifest_id", "type": "identifier", "max_chars": 96},
+      {"name": "nonce", "type": "identifier", "max_chars": 96},
       {"name": "publisher_identity", "type": "issuer_identifier", "max_chars": 96},
       {"name": "key_id", "type": "issuer_key_identifier", "max_chars": 96},
       {"name": "usage_profile", "type": "enum", "values": [
@@ -103,11 +103,13 @@
     "license_sha256": "string",
     "provenance_reference": "string",
     "provenance_sha256": "string",
-    "evidence_manifest_reference": "string",
     "evidence_manifest_sha256": "canonical_manifest_sha256",
-    "manifest_id": "string",
+    "nonce": "string",
     "publisher_identity": "string",
     "key_id": "string",
+    "manifest_issued_at": "u256_unix_seconds",
+    "manifest_expires_at": "u256_unix_seconds",
+    "manifest_signature": "lowercase_low_s_signature_hex",
     "usage_profile": "string",
     "submitter": "address_hex_string",
     "registered_at": "u256_unix_seconds",
@@ -136,10 +138,11 @@
     "administration_reason": "string_or_empty"
   },
   "signed_manifest": {
-    "canonical_encoding": "UTF-8 JSON, sorted keys, no insignificant whitespace, ensure_ascii=false",
+    "canonical_encoding": "UTF-8 JSON, sorted keys, no insignificant whitespace, ensure_ascii=false; supplied inline at registration",
+    "storage": "canonical digest and bounded signed fields are stored; the raw manifest is not stored",
     "signature_input": "canonical manifest JSON with signature field removed",
     "fields": [
-      "manifest_id",
+      "nonce",
       "manifest_version",
       "dataset_id",
       "dataset_reference",
@@ -164,7 +167,7 @@
     "authentication_status": [
       "NOT_EVALUATED", "AUTHENTICATED", "UNREGISTERED_ISSUER", "REVOKED_ISSUER", "ROTATED_KEY",
       "INVALID_SIGNATURE", "EXPIRED", "NOT_YET_VALID", "REPLAYED", "MANIFEST_MISMATCH",
-      "MALFORMED_MANIFEST", "CANONICALIZATION_MISMATCH"
+      "MALFORMED_MANIFEST", "CANONICALIZATION_MISMATCH", "MANIFEST_DIGEST_MISMATCH"
     ],
     "license_status": ["NOT_EVALUATED", "COMPATIBLE", "INCOMPATIBLE", "INCONCLUSIVE"],
     "provenance_status": ["NOT_EVALUATED", "COMPLETE", "INCOMPLETE", "INCONCLUSIVE"]
@@ -184,7 +187,7 @@
     "dataset_bytes": 1048576,
     "license_bytes": 16384,
     "provenance_manifest_bytes": 32768,
-    "evidence_manifest_bytes": 16384,
+    "inline_manifest_bytes": 16384,
     "prompt_chars": 52000,
     "certification_record_chars": 4096,
     "signature_lifetime_seconds": 31622400,

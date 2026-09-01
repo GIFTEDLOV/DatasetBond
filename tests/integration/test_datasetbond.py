@@ -1,4 +1,4 @@
-"""Studio-mode integration collection.
+"""Studio-mode DatasetBond v2.1 integration collection.
 
 Run with ``gltest tests/integration/ -v -s`` after configuring a localnet or Studio. This file is
 not part of the offline pytest suite's default execution in CI environments without Studio.

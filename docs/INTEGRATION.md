@@ -1,4 +1,4 @@
-# DatasetBond v2 integration guide
+# DatasetBond v2.1 integration guide
 
 ## 1. Establish the trust root
 
@@ -17,7 +17,7 @@ register_issuer_key(
 Keep the root account in the consumer's governance process. Key registration means only that this
 root approved the key/issuer mapping. It is not a legal identity or ownership attestation.
 
-## 2. Build and sign the canonical manifest
+## 2. Build and sign the canonical inline manifest
 
 Create a JSON object with exactly the fields documented in [`docs/SCHEMA.md`](SCHEMA.md). Serialize
 it as sorted-key UTF-8 JSON with no insignificant whitespace and `ensure_ascii=false`. Remove the
@@ -28,7 +28,8 @@ issuer's secp256k1 private key. Encode low-`s` `r||s` as 128 lowercase hex chara
 The package's `evidence_manifest_sha256` is the SHA-256 of the complete signed manifest bytes. The
 signed manifest covers the dataset ID/reference/digest, license reference/digest, provenance
 reference/digest, use profile, issuer identity, key ID, version, validity timestamps, algorithm,
-and signature. `manifest_id` is single-use after a terminal certification result.
+and signature. `nonce` is single-use after a terminal certification result. Keep the complete
+canonical signed JSON string in the registration call; it does not need to be published anywhere.
 
 ## 3. Register exact evidence
 
@@ -43,8 +44,8 @@ Submit this exact argument order to `register_dataset`:
   "<sha256 of exact license bytes>",
   "https://raw.githubusercontent.com/acme/provenance/<40-hex-commit>/manifest.json",
   "<sha256 of exact provenance bytes>",
-  "https://publisher.example/evidence-manifest/demo-v2.json",
-  "<sha256 of exact signed manifest bytes>",
+  "<complete canonical signed manifest JSON supplied inline>",
+  "<sha256 of exact inline manifest UTF-8 bytes>",
   "manifest-2026-01",
   "example-publisher",
   "example-key-2026-a",
@@ -54,8 +55,9 @@ Submit this exact argument order to `register_dataset`:
 
 Replace the illustrative values with real evidence. Dataset, license, and provenance references
 must be content-addressed or commit-pinned; ordinary HTTPS URLs are rejected for those fields. The
-signed manifest locator may be ordinary HTTPS because its bytes are digest-checked and signed, but
-the locator is not permanent.
+inline manifest is parsed and anchored at registration, so no new external manifest file or
+manifest publication is required. The three underlying evidence references still need to be
+available to validators at certification time.
 
 ## 4. Certify and consume
 

@@ -1,7 +1,8 @@
-"""Client-neutral DatasetBond v2 integration example.
+"""Client-neutral DatasetBond v2.1 integration example.
 
 This module constructs call-shaped payloads only. It does not sign, deploy, broadcast, or contact a
-network. Sign the canonical manifest with an approved issuer key before submitting its bytes/digest.
+network. The signed manifest is supplied inline; sign its canonical bytes with an approved issuer
+key before submitting the JSON string and digest.
 """
 
 from __future__ import annotations
@@ -23,14 +24,13 @@ def registration_call(
     license_bytes: bytes,
     provenance_reference: str,
     provenance_bytes: bytes,
-    evidence_manifest_reference: str,
-    evidence_manifest_bytes: bytes,
-    manifest_id: str,
+    evidence_manifest: str,
+    nonce: str,
     publisher_identity: str,
     key_id: str,
     usage_profile: str,
 ) -> dict[str, Any]:
-    """Build the exact v2 register_dataset call and bind hashes to exact bytes."""
+    """Build the exact v2.1 register_dataset call and bind hashes to exact bytes."""
     return {
         "method": "register_dataset",
         "args": [
@@ -41,9 +41,9 @@ def registration_call(
             sha256_hex(license_bytes),
             provenance_reference,
             sha256_hex(provenance_bytes),
-            evidence_manifest_reference,
-            sha256_hex(evidence_manifest_bytes),
-            manifest_id,
+            evidence_manifest,
+            sha256_hex(evidence_manifest.encode("utf-8")),
+            nonce,
             publisher_identity,
             key_id,
             usage_profile,
@@ -97,12 +97,12 @@ if __name__ == "__main__":
         "dataset_reference": "https://raw.githubusercontent.com/acme/datasets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/data.csv",
         "license_reference": "https://raw.githubusercontent.com/spdx/license-list-data/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/licenses/MIT.txt",
         "provenance_reference": "https://raw.githubusercontent.com/acme/provenance/cccccccccccccccccccccccccccccccccccccccc/manifests/demo.json",
-        "evidence_manifest_reference": "https://publisher.example/evidence-manifest/demo-v2.json",
+        "evidence_manifest": "<canonical signed evidence manifest JSON supplied inline>",
     }
     dataset_bytes = b"id,value\n1,example\n"
     license_bytes = b"MIT license bytes"
     provenance_bytes = b"<canonical provenance manifest bytes>"
-    evidence_manifest_bytes = b"<canonical signed evidence manifest bytes>"
+    evidence_manifest = "<canonical signed evidence manifest JSON supplied inline>"
     calls = [
         register_issuer_key_call(
             "example-publisher",
@@ -117,8 +117,7 @@ if __name__ == "__main__":
             license_bytes,
             package["provenance_reference"],
             provenance_bytes,
-            package["evidence_manifest_reference"],
-            evidence_manifest_bytes,
+            evidence_manifest,
             "manifest-2026-01",
             "example-publisher",
             "example-key-2026-a",

@@ -1,8 +1,9 @@
-# Exact DatasetBond v2 schema
+# Exact DatasetBond v2.1 schema
 
 The machine-readable source of truth is [`schema/datasetbond.schema.json`](../schema/datasetbond.schema.json).
-The v2 API adds a deployer-owned trust root and requires every certification package to identify a
-signed evidence manifest. The trust root authenticates registered key control, not legal ownership.
+The v2.1 API adds a deployer-owned trust root and requires every certification package to supply a
+bounded inline canonical signed evidence manifest. The trust root authenticates registered key
+control, not legal ownership.
 
 ## Deployment trust root
 
@@ -20,9 +21,9 @@ register_dataset(
   license_sha256: string,
   provenance_reference: string,
   provenance_sha256: string,
-  evidence_manifest_reference: string,
+  evidence_manifest: string,
   evidence_manifest_sha256: string,
-  manifest_id: string,
+  nonce: string,
   publisher_identity: string,
   key_id: string,
   usage_profile: string,
@@ -31,9 +32,9 @@ register_dataset(
 
 `dataset_reference`, `license_reference`, and `provenance_reference` must be HTTPS content- or
 commit-addressed references: commit-pinned GitHub, Arweave transaction, or HTTPS IPFS gateway/path.
-They are not generic immutable HTTPS URLs. `evidence_manifest_reference` is an HTTPS locator whose
-retrieved bytes must match its digest and the signed canonical manifest; the signature supplies the
-authentication property even when the locator itself can move.
+They are not generic immutable HTTPS URLs. The signed manifest is not referenced by URL: its
+canonical UTF-8 JSON is supplied directly as `evidence_manifest` and anchored by the supplied
+`evidence_manifest_sha256`.
 
 All references are at most 512 characters, credential-free, and have no query or fragment. Every
 digest is exactly 64 lowercase hexadecimal characters. Identifiers are 1-96 characters matching
@@ -52,10 +53,11 @@ signature is 64-byte low-`s` ECDSA `r||s` as 128 lowercase hex characters. Verif
 self-contained pure-Python secp256k1 verifier using runtime-supported integer arithmetic and
 SHA-256; no host-only crypto package or invented GenVM verifier API is used.
 
-## Canonical signed evidence manifest
+## Canonical inline signed evidence manifest
 
-The signed manifest is UTF-8 JSON with exactly these keys, sorted lexicographically, no insignificant
-whitespace, and `ensure_ascii=false`:
+The inline manifest is UTF-8 JSON with exactly these keys, sorted lexicographically, no
+insignificant whitespace, and `ensure_ascii=false`. `manifest_version` remains part of the exact
+field set for versioned canonicalization:
 
 ```json
 {
@@ -67,7 +69,7 @@ whitespace, and `ensure_ascii=false`:
   "key_id": "example-key-2026-a",
   "license_reference": "the registered content-addressed reference",
   "license_sha256": "the registered digest",
-  "manifest_id": "manifest-2026-01",
+  "nonce": "manifest-2026-01",
   "manifest_version": 2,
   "provenance_reference": "the registered content-addressed reference",
   "provenance_sha256": "the registered digest",
@@ -78,11 +80,12 @@ whitespace, and `ensure_ascii=false`:
 }
 ```
 
-`evidence_manifest_reference` is not a signed-manifest field; the package argument points to the
-signed manifest itself. The signature input is the same canonical JSON with `signature` removed.
-`evidence_manifest_sha256` is the SHA-256 of the complete canonical signed-manifest bytes and is
-the certificate's canonical manifest digest. A non-canonical body or a digest mismatch is never
-accepted.
+The signature input is the same canonical JSON with `signature` removed. The
+`evidence_manifest_sha256` argument is the SHA-256 of the complete canonical signed-manifest UTF-8
+bytes and is the certificate's canonical manifest digest. Registration rejects non-canonical JSON,
+unknown/missing fields, a digest mismatch, and any mismatch between manifest fields and registration
+arguments. Certification does not fetch a manifest URL; it reconstructs and re-authenticates the
+anchored fields.
 
 ## Stored certificate
 
@@ -94,8 +97,9 @@ certificate_id, dataset_id,
 dataset_reference, dataset_sha256,
 license_reference, license_sha256,
 provenance_reference, provenance_sha256,
-evidence_manifest_reference, evidence_manifest_sha256,
-manifest_id, publisher_identity, key_id, usage_profile, submitter,
+evidence_manifest_sha256,
+nonce, publisher_identity, key_id,
+manifest_issued_at, manifest_expires_at, manifest_signature, usage_profile, submitter,
 registered_at, evaluated_at, revoked_at,
 status, verdict, attempts,
 certification_record, revocation_reason,

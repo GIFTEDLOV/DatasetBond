@@ -1,9 +1,10 @@
 # Provenance of reused patterns
 
-DatasetBond v2 is an in-place hardening of commit `d34288aaf19cccd00c480d5ccc5f694ded7c2705`.
+DatasetBond v2.1 is an in-place hardening of commit `7b6aec675bdcacad24e562cc06bf9b66ce27959e`.
 The existing DatasetBond architecture, bounded verdict model, evidence-fetch boundary, and
-submitter-only certificate revocation were preserved. No source file was copied from another
-workspace, and Aegis, NimbusPact, and other repositories were not modified.
+submitter-only certificate revocation were preserved. The signed manifest is now supplied inline
+and anchored by its canonical digest; no new external manifest file is required. No source file was
+copied from another workspace, and Aegis, NimbusPact, and other repositories were not modified.
 
 The implementation patterns were informed by:
 

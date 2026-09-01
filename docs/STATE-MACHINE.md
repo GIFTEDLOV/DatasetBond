@@ -1,4 +1,4 @@
-# DatasetBond v2 state machine
+# DatasetBond v2.1 state machine
 
 ```text
 REGISTERED
@@ -13,7 +13,7 @@ CERTIFIED -- submitter-only revoke_certificate(reason) ---------> REVOKED
 `REGISTERED` has no final verdict and all four level statuses are `NOT_EVALUATED`. Each evaluation
 increments `attempts` and stores a bounded canonical record. `INCONCLUSIVE` is retryable until the
 attempt limit because external evidence or model execution can be unavailable. `CERTIFIED` and
-`NOT_CERTIFIED` consume the signed `manifest_id` and cannot be evaluated again; `REVOKED` is also
+`NOT_CERTIFIED` consume the signed `nonce` and cannot be evaluated again; `REVOKED` is also
 terminal.
 
 The stored levels are independent:

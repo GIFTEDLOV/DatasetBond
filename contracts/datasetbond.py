@@ -1,5 +1,5 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
-"""DatasetBond v2 -- signed evidence and bounded dataset-license certification.
+"""DatasetBond v2.1 -- inline signed evidence and bounded dataset-license certification.
 
 The contract answers one question for one immutable evidence package:
 
@@ -26,7 +26,7 @@ from genlayer import *
 # Canonical schema and bounds
 # ---------------------------------------------------------------------------------------------
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 2.1
 
 MAX_DATASET_ID_LEN = 96
 MAX_REFERENCE_LEN = 512
@@ -81,6 +81,7 @@ AUTH_INVALID_SIGNATURE = "INVALID_SIGNATURE"
 AUTH_EXPIRED = "EXPIRED"
 AUTH_NOT_YET_VALID = "NOT_YET_VALID"
 AUTH_REPLAYED = "REPLAYED"
+AUTH_MANIFEST_DIGEST_MISMATCH = "MANIFEST_DIGEST_MISMATCH"
 AUTH_MANIFEST_MISMATCH = "MANIFEST_MISMATCH"
 AUTH_MALFORMED_MANIFEST = "MALFORMED_MANIFEST"
 AUTH_CANONICALIZATION_MISMATCH = "CANONICALIZATION_MISMATCH"
@@ -146,11 +147,13 @@ class Certificate:
     license_sha256: str
     provenance_reference: str
     provenance_sha256: str
-    evidence_manifest_reference: str
     evidence_manifest_sha256: str
-    manifest_id: str
+    nonce: str
     publisher_identity: str
     key_id: str
+    manifest_issued_at: u256
+    manifest_expires_at: u256
+    manifest_signature: str
     usage_profile: str
     submitter: str
     registered_at: u256
@@ -271,11 +274,6 @@ def _validate_reference(field: str, value: str) -> str:
     if not _is_immutable_reference(reference):
         _fail(ERROR_EXPECTED, field + " must be an immutable commit- or content-addressed reference")
     return reference
-
-
-def _validate_signed_manifest_reference(field: str, value: str) -> str:
-    """Validate a signed-manifest locator; its bytes are authenticated separately."""
-    return _validate_https_locator(field, value)
 
 
 def _validate_sha256(field: str, value: str) -> str:
@@ -447,7 +445,7 @@ def _object_without_duplicate_keys(pairs: list) -> dict:
 
 
 _SIGNED_MANIFEST_FIELDS = {
-    "manifest_id",
+    "nonce",
     "manifest_version",
     "dataset_id",
     "dataset_reference",
@@ -466,7 +464,7 @@ _SIGNED_MANIFEST_FIELDS = {
 }
 
 
-def _parse_signed_manifest(
+def _parse_inline_manifest(
     raw: bytes,
     dataset_id: str,
     dataset_reference: str,
@@ -476,16 +474,12 @@ def _parse_signed_manifest(
     provenance_reference: str,
     provenance_digest: str,
     evidence_manifest_digest: str,
-    manifest_id: str,
+    nonce: str,
     publisher_identity: str,
     key_id: str,
     profile: str,
-    now: int,
-    issuer_status: str | None,
-    issuer_id: str,
-    public_key: str,
 ) -> tuple[str, dict | None]:
-    """Parse a canonical signed manifest and authenticate its declared package."""
+    """Parse and bind an inline canonical manifest without network or model work."""
     try:
         manifest_text = raw.decode("utf-8")
         manifest = json.loads(manifest_text, object_pairs_hook=_object_without_duplicate_keys)
@@ -496,8 +490,10 @@ def _parse_signed_manifest(
     canonical = _canonical_json(manifest).encode("utf-8")
     if canonical != raw:
         return AUTH_CANONICALIZATION_MISMATCH, None
+    if _sha256(raw) != evidence_manifest_digest:
+        return AUTH_MANIFEST_DIGEST_MISMATCH, None
     if (
-        manifest.get("manifest_id") != manifest_id
+        manifest.get("nonce") != nonce
         or manifest.get("manifest_version") != MANIFEST_VERSION
         or manifest.get("dataset_id") != dataset_id
         or manifest.get("dataset_reference") != dataset_reference
@@ -512,7 +508,7 @@ def _parse_signed_manifest(
         or manifest.get("signature_algorithm") != SIGNATURE_ALGORITHM
     ):
         return AUTH_MANIFEST_MISMATCH, None
-    for field in ("manifest_id", "publisher_identity", "key_id"):
+    for field in ("nonce", "publisher_identity", "key_id"):
         value = manifest.get(field)
         if not isinstance(value, str) or _DATASET_ID_RE.match(value) is None:
             return AUTH_MALFORMED_MANIFEST, None
@@ -528,13 +524,99 @@ def _parse_signed_manifest(
         or expires_at - issued_at > MAX_SIGNATURE_LIFETIME
     ):
         return AUTH_MALFORMED_MANIFEST, None
+    signature = manifest.get("signature")
+    if not isinstance(signature, str) or _SIGNATURE_HEX_RE.match(signature) is None:
+        return AUTH_MALFORMED_MANIFEST, None
+    if manifest.get("signature_algorithm") != SIGNATURE_ALGORITHM:
+        return AUTH_MALFORMED_MANIFEST, None
+    return AUTH_NOT_EVALUATED, manifest
+
+
+def _stored_manifest(
+    dataset_id: str,
+    dataset_reference: str,
+    dataset_digest: str,
+    license_reference: str,
+    license_digest: str,
+    provenance_reference: str,
+    provenance_digest: str,
+    nonce: str,
+    publisher_identity: str,
+    key_id: str,
+    profile: str,
+    issued_at: int,
+    expires_at: int,
+    signature: str,
+) -> dict:
+    """Reconstruct the exact canonical manifest from its bounded on-chain fields."""
+    return {
+        "nonce": nonce,
+        "manifest_version": MANIFEST_VERSION,
+        "dataset_id": dataset_id,
+        "dataset_reference": dataset_reference,
+        "dataset_sha256": dataset_digest,
+        "license_reference": license_reference,
+        "license_sha256": license_digest,
+        "provenance_reference": provenance_reference,
+        "provenance_sha256": provenance_digest,
+        "usage_profile": profile,
+        "publisher_identity": publisher_identity,
+        "key_id": key_id,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+        "signature_algorithm": SIGNATURE_ALGORITHM,
+        "signature": signature,
+    }
+
+
+def _authenticate_stored_manifest(
+    dataset_id: str,
+    dataset_reference: str,
+    dataset_digest: str,
+    license_reference: str,
+    license_digest: str,
+    provenance_reference: str,
+    provenance_digest: str,
+    evidence_manifest_digest: str,
+    nonce: str,
+    publisher_identity: str,
+    key_id: str,
+    profile: str,
+    issued_at: int,
+    expires_at: int,
+    signature: str,
+    now: int,
+    issuer_status: str | None,
+    issuer_id: str,
+    public_key: str,
+    replay_blocked: bool,
+) -> tuple[str, dict | None]:
+    """Re-hash and authenticate the inline manifest before semantic evaluation."""
+    manifest = _stored_manifest(
+        dataset_id,
+        dataset_reference,
+        dataset_digest,
+        license_reference,
+        license_digest,
+        provenance_reference,
+        provenance_digest,
+        nonce,
+        publisher_identity,
+        key_id,
+        profile,
+        issued_at,
+        expires_at,
+        signature,
+    )
+    canonical_bytes = _canonical_json(manifest).encode("utf-8")
+    if _sha256(canonical_bytes) != evidence_manifest_digest:
+        return AUTH_MANIFEST_DIGEST_MISMATCH, None
+    if replay_blocked:
+        return AUTH_REPLAYED, None
     if now < issued_at:
         return AUTH_NOT_YET_VALID, None
     if now > expires_at:
         return AUTH_EXPIRED, None
-    signature = manifest.get("signature")
-    if not isinstance(signature, str) or _SIGNATURE_HEX_RE.match(signature) is None:
-        return AUTH_MALFORMED_MANIFEST, None
     if issuer_status is None:
         return AUTH_UNREGISTERED_ISSUER, None
     if issuer_id != publisher_identity:
@@ -548,8 +630,6 @@ def _parse_signed_manifest(
     unsigned_manifest = dict(manifest)
     del unsigned_manifest["signature"]
     unsigned_bytes = _canonical_json(unsigned_manifest).encode("utf-8")
-    if _sha256(raw) != evidence_manifest_digest:
-        return AUTH_MANIFEST_MISMATCH, None
     if not _verify_secp256k1_sha256(public_key, signature, unsigned_bytes):
         return AUTH_INVALID_SIGNATURE, None
     return AUTHENTICATED, manifest
@@ -728,6 +808,7 @@ _AUTHENTICATION_STATUSES = (
     AUTH_EXPIRED,
     AUTH_NOT_YET_VALID,
     AUTH_REPLAYED,
+    AUTH_MANIFEST_DIGEST_MISMATCH,
     AUTH_MANIFEST_MISMATCH,
     AUTH_MALFORMED_MANIFEST,
     AUTH_CANONICALIZATION_MISMATCH,
@@ -787,35 +868,22 @@ def _evaluate_package(
     license_digest: str,
     provenance_reference: str,
     provenance_digest: str,
-    evidence_manifest_reference: str,
     evidence_manifest_digest: str,
-    manifest_id: str,
+    nonce: str,
     publisher_identity: str,
     key_id: str,
     profile: str,
+    manifest_issued_at: int,
+    manifest_expires_at: int,
+    manifest_signature: str,
     now: int,
     issuer_status: str | None,
     issuer_id: str,
     public_key: str,
     replay_blocked: bool,
 ) -> dict:
-    """Fetch, authenticate, and semantically judge one package in a nondeterministic VM."""
-    if replay_blocked:
-        return _inconclusive_result(
-            authentication_status=AUTH_REPLAYED,
-        )
-
-    evidence_manifest_status, signed_manifest_bytes = _fetch_verified(
-        evidence_manifest_reference,
-        evidence_manifest_digest,
-        MAX_EVIDENCE_MANIFEST_BYTES,
-        False,
-    )
-    if evidence_manifest_status != INTEGRITY_VERIFIED or signed_manifest_bytes is None:
-        return _inconclusive_result(integrity_status=evidence_manifest_status)
-
-    authentication_status, signed_manifest = _parse_signed_manifest(
-        signed_manifest_bytes,
+    """Authenticate the anchored manifest, then fetch and semantically judge the three evidence sources."""
+    authentication_status, signed_manifest = _authenticate_stored_manifest(
         dataset_id,
         dataset_reference,
         dataset_digest,
@@ -824,14 +892,18 @@ def _evaluate_package(
         provenance_reference,
         provenance_digest,
         evidence_manifest_digest,
-        manifest_id,
+        nonce,
         publisher_identity,
         key_id,
         profile,
+        manifest_issued_at,
+        manifest_expires_at,
+        manifest_signature,
         now,
         issuer_status,
         issuer_id,
         public_key,
+        replay_blocked,
     )
     if authentication_status != AUTHENTICATED or signed_manifest is None:
         return _inconclusive_result(
@@ -993,11 +1065,13 @@ def _certificate_dict(certificate: Certificate) -> dict:
         "license_sha256": certificate.license_sha256,
         "provenance_reference": certificate.provenance_reference,
         "provenance_sha256": certificate.provenance_sha256,
-        "evidence_manifest_reference": certificate.evidence_manifest_reference,
         "evidence_manifest_sha256": certificate.evidence_manifest_sha256,
-        "manifest_id": certificate.manifest_id,
+        "nonce": certificate.nonce,
         "publisher_identity": certificate.publisher_identity,
         "key_id": certificate.key_id,
+        "manifest_issued_at": int(certificate.manifest_issued_at),
+        "manifest_expires_at": int(certificate.manifest_expires_at),
+        "manifest_signature": certificate.manifest_signature,
         "usage_profile": certificate.usage_profile,
         "submitter": certificate.submitter,
         "registered_at": int(certificate.registered_at),
@@ -1038,7 +1112,7 @@ class DatasetBond(gl.Contract):
     trust_root: str
     issuer_keys: TreeMap[str, IssuerKey]
     issuer_key_ids: DynArray[str]
-    used_manifest_ids: TreeMap[str, str]
+    used_nonces: TreeMap[str, str]
 
     def __init__(self) -> None:
         self.trust_root = gl.message.sender_address.as_hex
@@ -1156,9 +1230,9 @@ class DatasetBond(gl.Contract):
         license_sha256: str,
         provenance_reference: str,
         provenance_sha256: str,
-        evidence_manifest_reference: str,
+        evidence_manifest: str,
         evidence_manifest_sha256: str,
-        manifest_id: str,
+        nonce: str,
         publisher_identity: str,
         key_id: str,
         usage_profile: str,
@@ -1173,16 +1247,35 @@ class DatasetBond(gl.Contract):
         clean_license_sha256 = _validate_sha256("license_sha256", license_sha256)
         clean_provenance_reference = _validate_reference("provenance_reference", provenance_reference)
         clean_provenance_sha256 = _validate_sha256("provenance_sha256", provenance_sha256)
-        clean_evidence_manifest_reference = _validate_signed_manifest_reference(
-            "evidence_manifest_reference", evidence_manifest_reference
+        clean_evidence_manifest = _require_text(
+            "evidence_manifest", evidence_manifest, MAX_EVIDENCE_MANIFEST_BYTES
         )
+        if len(clean_evidence_manifest.encode("utf-8")) > MAX_EVIDENCE_MANIFEST_BYTES:
+            _fail(ERROR_EXPECTED, "evidence_manifest exceeds " + str(MAX_EVIDENCE_MANIFEST_BYTES) + " bytes")
         clean_evidence_manifest_sha256 = _validate_sha256(
             "evidence_manifest_sha256", evidence_manifest_sha256
         )
-        clean_manifest_id = _validate_identifier("manifest_id", manifest_id)
+        clean_nonce = _validate_identifier("nonce", nonce)
         clean_publisher_identity = _validate_identifier("publisher_identity", publisher_identity)
         clean_key_id = _validate_identifier("key_id", key_id)
         clean_profile = _validate_profile(usage_profile)
+        manifest_status, manifest = _parse_inline_manifest(
+            clean_evidence_manifest.encode("utf-8"),
+            clean_id,
+            clean_dataset_reference,
+            clean_dataset_sha256,
+            clean_license_reference,
+            clean_license_sha256,
+            clean_provenance_reference,
+            clean_provenance_sha256,
+            clean_evidence_manifest_sha256,
+            clean_nonce,
+            clean_publisher_identity,
+            clean_key_id,
+            clean_profile,
+        )
+        if manifest_status != AUTH_NOT_EVALUATED or manifest is None:
+            _fail(ERROR_EXPECTED, manifest_status)
         now = _transaction_timestamp(gl.message_raw["datetime"])
         submitter = gl.message.sender_address.as_hex
         certificate = Certificate(
@@ -1194,11 +1287,13 @@ class DatasetBond(gl.Contract):
             license_sha256=clean_license_sha256,
             provenance_reference=clean_provenance_reference,
             provenance_sha256=clean_provenance_sha256,
-            evidence_manifest_reference=clean_evidence_manifest_reference,
             evidence_manifest_sha256=clean_evidence_manifest_sha256,
-            manifest_id=clean_manifest_id,
+            nonce=clean_nonce,
             publisher_identity=clean_publisher_identity,
             key_id=clean_key_id,
+            manifest_issued_at=u256(manifest["issued_at"]),
+            manifest_expires_at=u256(manifest["expires_at"]),
+            manifest_signature=manifest["signature"],
             usage_profile=clean_profile,
             submitter=submitter,
             registered_at=u256(now),
@@ -1233,12 +1328,14 @@ class DatasetBond(gl.Contract):
         license_digest = certificate.license_sha256
         provenance_reference = certificate.provenance_reference
         provenance_digest = certificate.provenance_sha256
-        evidence_manifest_reference = certificate.evidence_manifest_reference
         evidence_manifest_digest = certificate.evidence_manifest_sha256
-        manifest_id = certificate.manifest_id
+        nonce = certificate.nonce
         publisher_identity = certificate.publisher_identity
         key_id = certificate.key_id
         profile = certificate.usage_profile
+        manifest_issued_at = int(certificate.manifest_issued_at)
+        manifest_expires_at = int(certificate.manifest_expires_at)
+        manifest_signature = certificate.manifest_signature
         if int(certificate.attempts) >= MAX_CERTIFICATION_ATTEMPTS:
             _fail(ERROR_EXPECTED, "CERTIFICATION_ATTEMPT_LIMIT")
         now = _transaction_timestamp(gl.message_raw["datetime"])
@@ -1250,7 +1347,7 @@ class DatasetBond(gl.Contract):
             issuer_status = issuer_key.status
             issuer_id = issuer_key.issuer_id
             public_key = issuer_key.public_key
-        replay_blocked = manifest_id in self.used_manifest_ids
+        replay_blocked = nonce in self.used_nonces
 
         def leader_fn() -> dict:
             return _evaluate_package(
@@ -1261,12 +1358,14 @@ class DatasetBond(gl.Contract):
                 license_digest,
                 provenance_reference,
                 provenance_digest,
-                evidence_manifest_reference,
                 evidence_manifest_digest,
-                manifest_id,
+                nonce,
                 publisher_identity,
                 key_id,
                 profile,
+                manifest_issued_at,
+                manifest_expires_at,
+                manifest_signature,
                 now,
                 issuer_status,
                 issuer_id,
@@ -1288,12 +1387,14 @@ class DatasetBond(gl.Contract):
                 license_digest,
                 provenance_reference,
                 provenance_digest,
-                evidence_manifest_reference,
                 evidence_manifest_digest,
-                manifest_id,
+                nonce,
                 publisher_identity,
                 key_id,
                 profile,
+                manifest_issued_at,
+                manifest_expires_at,
+                manifest_signature,
                 now,
                 issuer_status,
                 issuer_id,
@@ -1317,7 +1418,7 @@ class DatasetBond(gl.Contract):
                 "license_sha256": certificate.license_sha256,
                 "provenance_sha256": certificate.provenance_sha256,
                 "evidence_manifest_sha256": certificate.evidence_manifest_sha256,
-                "manifest_id": certificate.manifest_id,
+                "nonce": certificate.nonce,
                 "usage_profile": certificate.usage_profile,
                 "verdict": final["verdict"],
                 "integrity_status": final["integrity_status"],
@@ -1341,7 +1442,7 @@ class DatasetBond(gl.Contract):
         certificate.license_status = final["license_status"]
         certificate.provenance_status = final["provenance_status"]
         if final["verdict"] != VERDICT_INCONCLUSIVE:
-            self.used_manifest_ids[certificate.manifest_id] = certificate.dataset_id
+            self.used_nonces[certificate.nonce] = certificate.dataset_id
         return _certificate_dict(certificate)
 
     @gl.public.write

@@ -1,7 +1,7 @@
-# DatasetBond v2 certification profiles
+# DatasetBond v2.1 certification profiles
 
 Profiles are explicit licensing/provenance criteria, not general-purpose dataset-quality rubrics.
-Every v2 package requires a valid signed evidence manifest from an active trust-root key.
+Every v2.1 package requires a bounded inline signed evidence manifest from an active trust-root key.
 
 | Profile | Required license meaning | Minimum provenance meaning |
 | --- | --- | --- |
@@ -10,13 +10,13 @@ Every v2 package requires a valid signed evidence manifest from an active trust-
 | `COMMERCIAL_TRAINING` | Commercial use and machine-learning/AI training explicitly permitted. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
 | `REDISTRIBUTION` | Redistribution explicitly permitted, including attribution/notice obligations. | Signed identity plus publisher, source, version, creation/collection time, transformations. |
 
-## Signed evidence manifest
+## Inline signed evidence manifest
 
 The canonical signed manifest contains exactly:
 
 ```json
 {
-  "manifest_id": "single-use-manifest",
+  "nonce": "single-use-manifest",
   "manifest_version": 2,
   "dataset_id": "demo-dataset-1",
   "dataset_reference": "registered content-addressed reference",
@@ -37,9 +37,10 @@ The canonical signed manifest contains exactly:
 
 Its bytes are UTF-8 canonical JSON: lexicographically sorted keys, no insignificant whitespace,
 and `ensure_ascii=false`. The signature covers the same canonical object with `signature` removed.
-The manifest digest covers the complete signed bytes. `manifest_id` is tracked as single-use after
-a terminal certification result, so an `INCONCLUSIVE` attempt can be retried but a used manifest
-cannot be replayed for another certificate.
+The manifest digest covers the complete signed bytes supplied inline at registration. `nonce` is
+tracked as single-use after a terminal certification result, so an `INCONCLUSIVE` attempt can be
+retried but a used manifest cannot be replayed for another certificate. No signed-manifest URL is
+required.
 
 ## Provenance completeness
 
