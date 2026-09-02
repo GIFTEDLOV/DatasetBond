@@ -90,10 +90,14 @@ def main() -> int:
     original_bytes = len(source.encode("utf-8"))
     compact_bytes = len(compact.encode("utf-8"))
     saved = original_bytes - compact_bytes
+    try:
+        display_output = str(output_path.relative_to(ROOT))
+    except ValueError:
+        display_output = str(output_path)
     print(
         {
             "source": str(source_path.relative_to(ROOT)),
-            "output": str(output_path.relative_to(ROOT)),
+            "output": display_output,
             "original_utf8_bytes": original_bytes,
             "compact_utf8_bytes": compact_bytes,
             "bytes_saved": saved,

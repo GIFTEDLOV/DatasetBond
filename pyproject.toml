@@ -1,10 +1,14 @@
 [project]
 name = "datasetbond"
-version = "0.1.0"
+version = "2.1.0"
 description = "A bounded GenLayer dataset-license and provenance certification primitive."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
+
+[project.urls]
+Repository = "https://github.com/GIFTEDLOV/DatasetBond"
+Documentation = "https://github.com/GIFTEDLOV/DatasetBond/tree/main/docs"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

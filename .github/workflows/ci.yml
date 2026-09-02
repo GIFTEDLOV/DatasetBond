@@ -1,0 +1,59 @@
+name: DatasetBond CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  PYTHONUTF8: "1"
+
+jobs:
+  quality:
+    name: release quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install pinned toolchain
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check line endings
+        run: python tools/check_line_endings.py
+      - name: Check reproducibility manifest
+        run: python tools/source_hash.py --check
+      - name: Check source, artifact, schema, fixture, and proof parity
+        run: python tools/release_audit.py
+      - name: Check declared schema surface
+        run: python tools/extract_schema.py
+      - name: Regenerate compact artifact and reject drift
+        run: |
+          python tools/minify_contract.py
+          git diff --exit-code -- contracts/datasetbond_compact.py
+      - name: GenVM lint readable contract
+        run: |
+          genvm-lint check contracts/datasetbond.py
+          genvm-lint validate contracts/datasetbond.py
+      - name: GenVM lint compact artifact
+        run: |
+          genvm-lint check contracts/datasetbond_compact.py
+          genvm-lint validate contracts/datasetbond_compact.py
+      - name: Direct and release tests
+        run: python -m pytest -q
+      - name: Mutation gates
+        run: |
+          python tools/mutation_test.py
+          python tools/mutation_test_compact.py
+      - name: Public fixture validation
+        run: python tools/validate_inline_fixture.py
+      - name: Secret scan
+        run: python tools/secret_scan.py
+      - name: Dependency health
+        run: python -m pip check
+      - name: Whitespace check
+        run: git diff --check

@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Pinned release-gate versions. The Bradbury proof used the older cached linter
+# environment; this clean release gate uses the current SDK-compatible linter.
+genlayer-test==0.29.2
+genvm-linter==0.11.0
+pytest==8.3.4
+eth-keys==0.5.1

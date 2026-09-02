@@ -25,9 +25,16 @@ and no approved host crypto dependency for contract use. DatasetBond therefore i
 documented pure-Python secp256k1 verifier inside the contract; test-only signing uses the client
 environment's `eth_keys` package and never enters the contract source.
 
-The installed environment reported GenLayer CLI `0.39.1`, `genlayer-test` `0.29.2`, and
-`genvm-linter` `0.10.0`. The contract remains pinned to the existing `py-genlayer` runner header;
-verification must be repeated if that runner or CLI is upgraded.
+The live-proof environment reported GenLayer CLI `0.39.1`, `genlayer-test` `0.29.2`, and
+`genvm-linter` `0.10.0`. The repository release gate pins `genlayer-test` `0.29.2`,
+`genvm-linter` `0.11.0`, and `pytest` `8.3.4`; the current linter was selected because it resolves
+the SDK in a clean environment. The contract remains pinned to the existing `py-genlayer` runner
+header; verification must be repeated if that runner or CLI is upgraded.
 
 These references describe API/design provenance only. They are not claims that DatasetBond inherits
 the other projects' semantics or security guarantees.
+
+The public `GIFTEDLOV/semantic-constraint` repository was also inspected as a release-quality
+reference for reproducibility manifests, deployable-artifact parity, CI gates, and reviewer-oriented
+documentation. DatasetBond does not copy its contract, fixtures, semantics, or test corpus; the
+reference informed repository hygiene only.

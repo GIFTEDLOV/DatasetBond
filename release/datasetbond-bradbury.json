@@ -1,0 +1,61 @@
+{
+  "release": "DatasetBond v2.1 Bradbury proof",
+  "track": "Intelligent Contract",
+  "network": {
+    "name": "GenLayer Bradbury",
+    "chain_id": 4221,
+    "rpc": "https://rpc-bradbury.genlayer.com"
+  },
+  "contract": {
+    "address": "0xEdAbfD1BbC7F9979156391277FF7E1BB8e07B495",
+    "audited_source": "contracts/datasetbond.py",
+    "audited_source_commit": "63652bf81c4a11b054cd58e18823fc0f455b3bc2",
+    "audited_source_sha256": "54c670e65bbde020bc34675814ad71cc808a9dd5b4d1c03365748fd77a843040",
+    "deployed_artifact": "contracts/datasetbond_compact.py",
+    "deployed_artifact_sha256": "146bea0d7be81aba5bef767decb2e3a838f7f1e4c29f4f14fc7530a1e36a979a",
+    "deployed_artifact_bytes": 47291,
+    "schema": "schema/datasetbond.schema.json",
+    "schema_version": 2.1
+  },
+  "transactions": {
+    "deployment": {
+      "hash": "0xad87b5a79c3b41d047f9060eb63d605d1b8309d93e2d7142bfb2f46e2581f279",
+      "status": "FINALIZED",
+      "consensus": "AGREE",
+      "execution": "FINISHED_WITH_RETURN"
+    },
+    "issuer_registration": {
+      "hash": "0xa37aff970ec06dc02a252c6a898508adb0339a5461c9ce115bfb76f856dfe0bf",
+      "status": "FINALIZED",
+      "consensus": "AGREE",
+      "execution": "FINISHED_WITH_RETURN"
+    },
+    "dataset_registration": {
+      "hash": "0xf6d52709016200bba23407444ce1f2d02be38fb916e8bd00ab4b8bb9494bb673",
+      "status": "FINALIZED",
+      "consensus": "AGREE",
+      "execution": "FINISHED_WITH_RETURN"
+    },
+    "certification": {
+      "hash": "0xd847ea9c66f197babdb016bc8b121b2f8774d463dd0dac9f6bfa3c06eb902330",
+      "status": "FINALIZED",
+      "consensus": "AGREE",
+      "execution": "FINISHED_WITH_RETURN",
+      "execution_hash": "0x1f2f23d3e704ef24639d2db208e988101da307e96b4b2f4e173c2c24290e4c62"
+    }
+  },
+  "certificate": {
+    "id": "datasetbond-demo-observations",
+    "status": "CERTIFIED",
+    "verdict": "CERTIFIED",
+    "authentication_status": "AUTHENTICATED",
+    "integrity_status": "VERIFIED",
+    "license_status": "COMPATIBLE",
+    "provenance_status": "COMPLETE",
+    "attempts": 1,
+    "evidence_manifest_sha256": "a94a015b30697f8cea2536703b7b9790fc219c8fe94795484f27f0b11caa28c7",
+    "dataset_sha256": "7b24103a164674959d071b3e69baa2c194e4f24fdd373a5ea8a1e6f430d5eb12",
+    "license_sha256": "8e28e056d91dbb82759a8e1b50ae0b81a07ddb3c2ee01e4592d38f9181a9881e",
+    "provenance_sha256": "179a3e8edb8ea41b2cc974e000a520a95f2d8bb1332fdc62dfacbcf5492a8479"
+  }
+}
