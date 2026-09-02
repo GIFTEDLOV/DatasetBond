@@ -158,8 +158,14 @@ def package(
     }
 
 
+# gltest 0.29.2 otherwise follows the latest GenVM tag.  The current latest
+# release does not publish the universal archive required by the direct loader;
+# pin the tested runner to the published artifact used by this release gate.
+DIRECT_SDK_VERSION = "v0.2.12"
+
+
 def deploy(direct_deploy):
-    return direct_deploy("contracts/datasetbond.py")
+    return direct_deploy("contracts/datasetbond.py", sdk_version=DIRECT_SDK_VERSION)
 
 
 def register(direct_vm, contract, direct_alice, pkg: dict) -> str:
