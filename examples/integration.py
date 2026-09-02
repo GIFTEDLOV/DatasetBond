@@ -18,6 +18,22 @@ def sha256_hex(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def validate_inline_manifest(evidence_manifest: str) -> str:
+    """Return the raw canonical manifest text required by register_dataset."""
+    if not isinstance(evidence_manifest, str) or not evidence_manifest.startswith("{"):
+        raise AssertionError("evidence_manifest must be raw JSON object text, not a JSON string literal")
+    try:
+        parsed = json.loads(evidence_manifest)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("evidence_manifest is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise AssertionError("json.loads(evidence_manifest) must return an object")
+    canonical = json.dumps(parsed, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if canonical != evidence_manifest:
+        raise AssertionError("evidence_manifest must be canonical sorted-key UTF-8 JSON")
+    return evidence_manifest
+
+
 def registration_call(
     dataset_id: str,
     dataset_reference: str,
@@ -33,23 +49,35 @@ def registration_call(
     usage_profile: str,
 ) -> dict[str, Any]:
     """Build the exact v2.1 register_dataset call and bind hashes to exact bytes."""
+    manifest_text = validate_inline_manifest(evidence_manifest)
+    args = [
+        dataset_id,
+        dataset_reference,
+        sha256_hex(dataset_bytes),
+        license_reference,
+        sha256_hex(license_bytes),
+        provenance_reference,
+        sha256_hex(provenance_bytes),
+        manifest_text,
+        sha256_hex(manifest_text.encode("utf-8")),
+        nonce,
+        publisher_identity,
+        key_id,
+        usage_profile,
+    ]
+    assert len(args) == 13
+    assert all(isinstance(argument, str) for argument in args)
+    assert args[7].startswith("{")
+    assert isinstance(json.loads(args[7]), dict)
+    assert len(args[7].encode("utf-8")) == 1195
+    assert sha256_hex(args[7].encode("utf-8")) == (
+        "a94a015b30697f8cea2536703b7b9790fc219c8fe94795484f27f0b11caa28c7"
+    )
+    assert args[8] == sha256_hex(args[7].encode("utf-8"))
+    assert args[7] != args[8]
     return {
         "method": "register_dataset",
-        "args": [
-            dataset_id,
-            dataset_reference,
-            sha256_hex(dataset_bytes),
-            license_reference,
-            sha256_hex(license_bytes),
-            provenance_reference,
-            sha256_hex(provenance_bytes),
-            evidence_manifest,
-            sha256_hex(evidence_manifest.encode("utf-8")),
-            nonce,
-            publisher_identity,
-            key_id,
-            usage_profile,
-        ],
+        "args": args,
     }
 
 
@@ -103,6 +131,11 @@ def demonstration_calls() -> list[dict[str, Any]]:
     dataset_bytes = (fixture_dir / "dataset.json").read_bytes()
     license_bytes = (fixture_dir / "LICENSE.txt").read_bytes()
     provenance_bytes = (fixture_dir / "provenance.json").read_bytes()
+    manifest_text = validate_inline_manifest(package["evidence_manifest"])
+    assert len(manifest_text.encode("utf-8")) == 1195
+    assert sha256_hex(manifest_text.encode("utf-8")) == (
+        "a94a015b30697f8cea2536703b7b9790fc219c8fe94795484f27f0b11caa28c7"
+    )
     return [
         register_issuer_key_call(
             package["publisher_identity"],
@@ -117,7 +150,7 @@ def demonstration_calls() -> list[dict[str, Any]]:
             license_bytes,
             package["provenance_reference"],
             provenance_bytes,
-            package["evidence_manifest"],
+            manifest_text,
             package["nonce"],
             package["publisher_identity"],
             package["key_id"],

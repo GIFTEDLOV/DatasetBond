@@ -11,6 +11,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import base64
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +70,12 @@ PROVENANCE_FIELDS = {
     "created_at",
     "transformations",
 }
+NODE_FETCH_SCRIPT = (
+    'const response = await fetch(process.argv[1], '
+    '{headers: {"User-Agent": "DatasetBond-fixture-validator"}}); '
+    'const body = new Uint8Array(await response.arrayBuffer()); '
+    'process.stdout.write(JSON.stringify({status: response.status, body: Buffer.from(body).toString("base64")}));'
+)
 
 
 def canonical_json(value: dict) -> bytes:
@@ -122,7 +131,26 @@ def fetch_exact(reference: str) -> tuple[int, bytes]:
     except HTTPError as exc:
         raise AssertionError(f"HTTP failure for {reference}: {exc.code}") from exc
     except (URLError, TimeoutError, OSError) as exc:
-        raise AssertionError(f"unavailable source for {reference}: {exc}") from exc
+        node = shutil.which("node")
+        if node is None:
+            raise AssertionError(f"unavailable source for {reference}: {exc}") from exc
+        try:
+            result = subprocess.run(
+                [node, "--input-type=module", "-e", NODE_FETCH_SCRIPT, reference],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or f"node exited with {result.returncode}")
+            payload = json.loads(result.stdout)
+            status = int(payload["status"])
+            body = base64.b64decode(payload["body"], validate=True)
+        except Exception as fallback_exc:
+            raise AssertionError(
+                f"unavailable source for {reference}: urllib={exc}; node-fetch={fallback_exc}"
+            ) from fallback_exc
     if status != 200:
         raise AssertionError(f"HTTP status for {reference} was {status}, expected 200")
     return int(status), body

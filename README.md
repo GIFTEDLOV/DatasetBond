@@ -29,11 +29,13 @@ absence of undisclosed source material, or permanent availability of external UR
 - [`tools/validate_inline_fixture.py`](tools/validate_inline_fixture.py) - read-only validator for
   the published self-owned demonstration package; it publishes no evidence and performs no chain
   write.
+- [`docs/BRADBURY-PROOF.md`](docs/BRADBURY-PROOF.md) - recorded controlled Bradbury proof.
 
 ## Local verification
 
 The checked environment uses GenLayer CLI `0.39.1`, `genvm-lint`, and `genlayer-test`. The repository
-contains no deployment or broadcast step.
+contains no automatic deployment or broadcast step; the controlled Bradbury proof is recorded in
+[`docs/BRADBURY-PROOF.md`](docs/BRADBURY-PROOF.md).
 
 ```powershell
 $env:PYTHONUTF8 = "1"
